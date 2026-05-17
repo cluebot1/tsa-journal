@@ -50,8 +50,8 @@ interface Trade {
   user_id: string
   date: string
   ticker: string
-  setup: string
-  direction: 'Long' | 'Short' | 'Straddle'
+  setup_type: string
+  direction: string
   pnl: number | null
   emotion?: string | null
 }
@@ -193,9 +193,10 @@ export default function AnalyticsPage() {
     fetchTrades()
   }, [fetchTrades])
 
-  // ─── Setup stats ──────────────────────────────────────────────────────────
-  const setupStats: SetupStat[] = SETUPS.map((setup) => {
-    const setupTrades = trades.filter((t) => t.setup === setup)
+  // ─── Setup stats — use all unique setup types from actual trades ───────────
+  const allSetupTypes = Array.from(new Set(trades.map(t => t.setup_type).filter(Boolean)))
+  const setupStats: SetupStat[] = allSetupTypes.map((setup) => {
+    const setupTrades = trades.filter((t) => t.setup_type === setup)
     const wins = setupTrades.filter((t) => (t.pnl ?? 0) > 0).length
     const winRate = setupTrades.length > 0 ? (wins / setupTrades.length) * 100 : 0
     const totalPnl = setupTrades.reduce((sum, t) => sum + (t.pnl ?? 0), 0)
@@ -206,7 +207,7 @@ export default function AnalyticsPage() {
       totalPnl: parseFloat(totalPnl.toFixed(2)),
       tradeCount: setupTrades.length,
     }
-  })
+  }).filter(s => s.tradeCount > 0).sort((a, b) => b.tradeCount - a.tradeCount)
 
   // ─── Day of week stats ────────────────────────────────────────────────────
   const pnlByDayOfWeek: DayOfWeekStat[] = DAYS_OF_WEEK.map((day) => {

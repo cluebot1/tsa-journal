@@ -25,8 +25,8 @@ interface Trade {
   user_id: string
   date: string
   ticker: string
-  setup: string
-  direction: 'Long' | 'Short'
+  setup_type: string
+  direction: string
   pnl: number | null
   notes?: string | null
   created_at?: string
@@ -203,7 +203,7 @@ export default function TradesPage() {
 
   // --- Filtering ---
   const filteredTrades = trades.filter((t) => {
-    const matchesSetup = filterSetup === 'all' || t.setup === filterSetup
+    const matchesSetup = filterSetup === 'all' || t.setup_type === filterSetup
     const matchesTicker =
       filterTicker.trim() === '' ||
       t.ticker.toLowerCase().includes(filterTicker.trim().toLowerCase())
@@ -427,10 +427,8 @@ export default function TradesPage() {
               className="bg-white border border-[#E2DDD6] text-[#0D0D1A] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0D0D1A]/20 w-full sm:w-auto"
             >
               <option value="all">All Setups</option>
-              {SETUPS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
+              {Array.from(new Set(trades.map(t => t.setup_type).filter(Boolean))).sort().map((s) => (
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
 
@@ -579,10 +577,10 @@ export default function TradesPage() {
                           <td className="px-6 py-4">
                             <span
                               className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${
-                                setupColors[trade.setup] ?? 'bg-gray-50 text-gray-700 border border-gray-100'
+                                setupColors[trade.setup_type] ?? 'bg-gray-50 text-gray-700 border border-gray-100'
                               }`}
                             >
-                              {trade.setup}
+                              {trade.setup_type}
                             </span>
                           </td>
                           <td className="px-6 py-4">
@@ -663,10 +661,10 @@ export default function TradesPage() {
                       <div className="flex items-center gap-2 mb-3">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${
-                            setupColors[trade.setup] ?? 'bg-gray-50 text-gray-700'
+                            setupColors[trade.setup_type] ?? 'bg-gray-50 text-gray-700'
                           }`}
                         >
-                          {trade.setup}
+                          {trade.setup_type}
                         </span>
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${
