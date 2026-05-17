@@ -59,6 +59,64 @@ function formatDateDisplay(dateStr: string): string {
   }
 }
 
+// --- CSV helpers ---
+function parseCSVLine(line: string): string[] {
+  const result: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQuotes = !inQuotes }
+    else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = '' }
+    else { current += line[i] }
+  }
+  result.push(current.trim())
+  return result
+}
+
+function normalizeHeader(h: string): string {
+  return h.toLowerCase().replace(/[^a-z]/g, '')
+}
+
+function mapHeader(h: string): string | null {
+  const n = normalizeHeader(h)
+  if (['date'].includes(n)) return 'date'
+  if (['symbol','ticker','stock'].includes(n)) return 'ticker'
+  if (['direction','side','type'].includes(n)) return 'direction'
+  if (['setup','setuptype'].includes(n)) return 'setup_type'
+  if (['entry','entryprice'].includes(n)) return 'entry_price'
+  if (['exit','exitprice'].includes(n)) return 'exit_price'
+  if (['pnl','pandl','profit','net','netpnl'].includes(n)) return 'pnl'
+  if (['contracts','qty','quantity'].includes(n)) return 'contracts'
+  if (['risk','riskamount'].includes(n)) return 'risk_amount'
+  if (['notes','comments','journal'].includes(n)) return 'notes'
+  if (['emotion'].includes(n)) return 'emotion'
+  if (['catalyst'].includes(n)) return 'catalyst'
+  return null
+}
+
+function parseDate(raw: string): string | null {
+  if (!raw) return null
+  const cleaned = raw.trim()
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned
+  // M/D/YYYY or MM/DD/YYYY or M/D/YY
+  const parts = cleaned.split('/')
+  if (parts.length === 3) {
+    let [m, d, y] = parts.map(Number)
+    if (y < 100) y += 2000
+    return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+  }
+  return null
+}
+
+function mapDirection(raw: string): string {
+  const v = raw.toLowerCase().trim()
+  if (['buy','long','call'].includes(v)) return 'long'
+  if (['sell','short','put'].includes(v)) return 'short'
+  if (['straddle'].includes(v)) return 'straddle'
+  return raw.toLowerCase()
+}
+
 export default function TradesPage() {
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
@@ -67,6 +125,10 @@ export default function TradesPage() {
   const [filterTicker, setFilterTicker] = useState<string>('')
   const [currentPage, setCurrentPage] = useState(1)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [showCsvModal, setShowCsvModal] = useState(false)
+  const [csvPreview, setCsvPreview] = useState<Record<string, string>[]>([])
+  const [csvParsed, setCsvParsed] = useState<Record<string, string>[]>([])
+  const [csvImporting, setCsvImporting] = useState(false)
 
   const fetchTrades = useCallback(async () => {
     setLoading(true)
@@ -125,6 +187,64 @@ export default function TradesPage() {
     currentPage * PAGE_SIZE
   )
 
+  // --- CSV Import ---
+  function handleCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      const lines = text.split(/\r?\n/).filter(l => l.trim())
+      if (lines.length < 2) { toast.error('CSV is empty or has no data rows.'); return }
+      const headers = parseCSVLine(lines[0])
+      const mapped = headers.map(mapHeader)
+      const rows: Record<string, string>[] = []
+      for (let i = 1; i < lines.length; i++) {
+        const vals = parseCSVLine(lines[i])
+        const row: Record<string, string> = {}
+        mapped.forEach((key, idx) => { if (key) row[key] = vals[idx] ?? '' })
+        if (row.date || row.ticker) rows.push(row)
+      }
+      setCsvParsed(rows)
+      setCsvPreview(rows.slice(0, 5))
+    }
+    reader.readAsText(file)
+  }
+
+  async function handleCsvImport() {
+    if (!csvParsed.length) return
+    setCsvImporting(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const inserts = csvParsed.map(row => ({
+        user_id: user.id,
+        date: parseDate(row.date ?? '') ?? new Date().toISOString().split("T")[0],
+        ticker: (row.ticker ?? 'UNKNOWN').toUpperCase(),
+        direction: row.direction ? mapDirection(row.direction) : null,
+        setup_type: row.setup_type ?? 'Other',
+        entry_price: row.entry_price ? parseFloat(row.entry_price.replace(/[$,]/g,'')) : null,
+        exit_price: row.exit_price ? parseFloat(row.exit_price.replace(/[$,]/g,'')) : null,
+        pnl: row.pnl ? parseFloat(row.pnl.replace(/[$,]/g,'')) : null,
+        contracts: row.contracts ? parseInt(row.contracts) : null,
+        risk_amount: row.risk_amount ? parseFloat(row.risk_amount.replace(/[$,]/g,'')) : null,
+        notes: row.notes ?? null,
+        emotion: row.emotion ?? null,
+        catalyst: row.catalyst ?? null,
+      }))
+      const { error } = await supabase.from('trades').insert(inserts)
+      if (error) { toast.error('Import failed: ' + error.message); return }
+      toast.success(`${inserts.length} trades imported!`)
+      setShowCsvModal(false)
+      setCsvParsed([])
+      setCsvPreview([])
+      await fetchTrades()
+    } finally {
+      setCsvImporting(false)
+    }
+  }
+
   // --- Delete ---
   async function handleDelete(id: string) {
     if (!confirm('Delete this trade? This cannot be undone.')) return
@@ -153,24 +273,25 @@ export default function TradesPage() {
           {/* Page header */}
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-[#0D0D1A]">Trade Log</h1>
-            <Link
-              href="/trades/new"
-              className="bg-[#0D0D1A] text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2"
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowCsvModal(true)}
+                className="bg-white border border-[#E2DDD6] text-[#0D0D1A] text-sm font-medium px-4 py-2.5 rounded-xl hover:opacity-80 transition-opacity flex items-center gap-2"
               >
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              Log Trade
-            </Link>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Import CSV
+              </button>
+              <Link
+                href="/trades/new"
+                className="bg-[#0D0D1A] text-white text-sm font-medium px-4 py-2.5 rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Log Trade
+              </Link>
+            </div>
           </div>
 
           {/* Filter bar */}
@@ -463,6 +584,59 @@ export default function TradesPage() {
       </main>
 
       <MobileNav />
+
+      {/* CSV Import Modal */}
+      {showCsvModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-[#0D0D1A]">Import Trades from CSV</h2>
+              <button onClick={() => { setShowCsvModal(false); setCsvParsed([]); setCsvPreview([]) }} className="text-[#6B6B6B] hover:text-[#0D0D1A] text-xl font-light">✕</button>
+            </div>
+
+            {csvPreview.length === 0 ? (
+              <div>
+                <p className="text-sm text-[#6B6B6B] mb-3">Upload your trade spreadsheet CSV. Columns auto-mapped from: Date, Ticker/Symbol, Direction, Setup, Entry, Exit, P&L, Contracts, Notes, Emotion.</p>
+                <label className="block w-full border-2 border-dashed border-[#E2DDD6] rounded-xl p-8 text-center cursor-pointer hover:border-[#0D0D1A] transition-colors">
+                  <svg className="mx-auto mb-2" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <p className="text-sm text-[#6B6B6B]">Click to upload .csv file</p>
+                  <input type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
+                </label>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-[#22C55E] font-medium mb-3">✓ {csvParsed.length} trades found — preview (first 5):</p>
+                <div className="overflow-x-auto mb-4">
+                  <table className="text-xs w-full">
+                    <thead>
+                      <tr className="border-b border-[#E2DDD6]">
+                        {Object.keys(csvPreview[0] || {}).map(k => (
+                          <th key={k} className="text-left px-2 py-1 text-[#6B6B6B] font-medium capitalize">{k.replace(/_/g,' ')}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvPreview.map((row, i) => (
+                        <tr key={i} className="border-b border-[#E2DDD6]/50">
+                          {Object.values(row).map((v, j) => (
+                            <td key={j} className="px-2 py-1.5 text-[#0D0D1A] truncate max-w-[100px]">{v}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => { setCsvParsed([]); setCsvPreview([]) }} className="flex-1 border border-[#E2DDD6] text-[#0D0D1A] text-sm py-2.5 rounded-xl hover:opacity-80 transition-opacity">Re-upload</button>
+                  <button onClick={handleCsvImport} disabled={csvImporting} className="flex-1 bg-[#0D0D1A] text-white text-sm py-2.5 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50">
+                    {csvImporting ? 'Importing...' : `Import ${csvParsed.length} Trades`}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

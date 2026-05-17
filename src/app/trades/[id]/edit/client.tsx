@@ -6,33 +6,50 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import NavBar from '@/components/NavBar'
 import MobileNav from '@/components/MobileNav'
-const SETUP_TYPES = [
+
+const DEFAULT_SETUP_TYPES = [
   '30-Min ORB',
   'Gap Strategy',
   '4H Reversal',
   'Key Level Reaction',
   'Broadening Formation Breakout',
 ]
+
+const EMOTIONS = [
+  'Calm', 'Confident', 'Focused', 'Anxious', 'FOMO',
+  'Frustrated', 'Overconfident', 'Greedy', 'Patient', 'Neutral',
+]
+
 const inputClass =
   'border border-[#E2DDD6] rounded-xl px-3 py-2 w-full bg-white focus:outline-none focus:ring-2 focus:ring-[#0D0D1A]/20 text-[#0D0D1A] placeholder:text-gray-400 text-sm'
 const labelClass = 'block text-xs font-semibold text-[#0D0D1A]/60 mb-1 uppercase tracking-wide'
 const sectionClass = 'bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6 space-y-5'
 const sectionTitleClass = 'text-base font-bold text-[#0D0D1A] mb-4'
+
 function today(): string {
   return new Date().toISOString().split('T')[0]
 }
+
 export default function EditTradePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const supabase = createClient()
   const [tradeId, setTradeId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | undefined>()
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [notFound, setNotFound] = useState(false)
+
+  // Custom setup types
+  const [customSetupTypes, setCustomSetupTypes] = useState<string[]>([])
+  const [showAddSetup, setShowAddSetup] = useState(false)
+  const [newSetupName, setNewSetupName] = useState('')
+  const [savingSetup, setSavingSetup] = useState(false)
+
   // Form state
   const [date, setDate] = useState(today())
   const [ticker, setTicker] = useState('')
-  const [direction, setDirection] = useState<'long' | 'short'>('long')
+  const [direction, setDirection] = useState<'long' | 'short' | 'straddle'>('long')
   const [setupType, setSetupType] = useState('')
   const [catalyst, setCatalyst] = useState('')
   const [keyLevel, setKeyLevel] = useState('')
@@ -41,12 +58,17 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
   const [entryPrice, setEntryPrice] = useState('')
   const [exitPrice, setExitPrice] = useState('')
   const [contracts, setContracts] = useState('')
-  const [premiumPaid, setPremiumPaid] = useState('')
   const [pnl, setPnl] = useState('')
   const [notes, setNotes] = useState('')
   const [screenshotUrls, setScreenshotUrls] = useState<string[]>([''])
-  // Track if we should auto-calculate PNL
-  const [autoCalcPnl, setAutoCalcPnl] = useState(false)
+
+  // Journal state
+  const [emotion, setEmotion] = useState('')
+  const [followedPlan, setFollowedPlan] = useState<'yes' | 'no' | 'partially' | ''>('')
+  const [whatWentRight, setWhatWentRight] = useState('')
+  const [whatWentWrong, setWhatWentWrong] = useState('')
+  const [lessons, setLessons] = useState('')
+
   useEffect(() => {
     async function load() {
       const { id } = await params
@@ -57,6 +79,16 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
         return
       }
       setUserEmail(user.email)
+      setUserId(user.id)
+
+      // Load custom setup types
+      const { data: customTypes } = await supabase
+        .from('custom_setup_types')
+        .select('name')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+      setCustomSetupTypes(customTypes?.map((r: { name: string }) => r.name) ?? [])
+
       const { data: trade, error } = await supabase
         .from('trades')
         .select('*')
@@ -71,10 +103,15 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
         router.push('/trades')
         return
       }
+
       // Populate form state
       setDate(trade.date ?? today())
       setTicker(trade.ticker ?? '')
-      setDirection(trade.direction === 'short' ? 'short' : 'long')
+      setDirection(
+        trade.direction === 'short' ? 'short'
+        : trade.direction === 'straddle' ? 'straddle'
+        : 'long'
+      )
       setSetupType(trade.setup_type ?? '')
       setCatalyst(trade.catalyst ?? '')
       setKeyLevel(trade.key_level ?? '')
@@ -83,7 +120,6 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
       setEntryPrice(trade.entry_price != null ? String(trade.entry_price) : '')
       setExitPrice(trade.exit_price != null ? String(trade.exit_price) : '')
       setContracts(trade.contracts != null ? String(trade.contracts) : '')
-      setPremiumPaid(trade.premium_paid != null ? String(trade.premium_paid) : '')
       setPnl(trade.pnl != null ? String(trade.pnl) : '')
       setNotes(trade.notes ?? '')
       setScreenshotUrls(
@@ -91,22 +127,49 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
           ? trade.screenshot_urls
           : ['']
       )
+      // Journal fields
+      setEmotion(trade.emotion ?? '')
+      setFollowedPlan(trade.followed_plan ?? '')
+      setWhatWentRight(trade.what_went_right ?? '')
+      setWhatWentWrong(trade.what_went_wrong ?? '')
+      setLessons(trade.lessons ?? '')
+
       setLoading(false)
     }
     load()
   }, [])
-  // Auto-calculate P&L when relevant fields change (only when user clears override)
-  useEffect(() => {
-    if (!autoCalcPnl) return
-    const entry = parseFloat(entryPrice)
-    const exit = parseFloat(exitPrice)
-    const qty = parseFloat(contracts)
-    const premium = parseFloat(premiumPaid)
-    if (!isNaN(entry) && !isNaN(exit) && !isNaN(qty) && !isNaN(premium)) {
-      const calc = (exit - entry) * qty * 100 - premium * qty
-      setPnl(calc.toFixed(2))
+
+  const allSetupTypes = [...DEFAULT_SETUP_TYPES, ...customSetupTypes]
+
+  async function handleAddSetupType() {
+    const name = newSetupName.trim()
+    if (!name || !userId) return
+    setSavingSetup(true)
+    try {
+      const { error } = await supabase
+        .from('custom_setup_types')
+        .insert({ user_id: userId, name })
+      if (error) throw error
+      setCustomSetupTypes((prev) => [...prev, name])
+      setSetupType(name)
+      setNewSetupName('')
+      setShowAddSetup(false)
+      toast.success('Setup type added!')
+    } catch {
+      toast.error('Failed to save setup type.')
+    } finally {
+      setSavingSetup(false)
     }
-  }, [entryPrice, exitPrice, contracts, premiumPaid, autoCalcPnl])
+  }
+
+  function handleSetupChange(value: string) {
+    if (value === '__add_new__') {
+      setShowAddSetup(true)
+    } else {
+      setSetupType(value)
+    }
+  }
+
   function addScreenshotUrl() {
     setScreenshotUrls((prev) => [...prev, ''])
   }
@@ -116,6 +179,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
   function updateScreenshotUrl(index: number, value: string) {
     setScreenshotUrls((prev) => prev.map((url, i) => (i === index ? value : url)))
   }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!date || !ticker || !setupType) {
@@ -140,10 +204,14 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
           entry_price: entryPrice ? parseFloat(entryPrice) : null,
           exit_price: exitPrice ? parseFloat(exitPrice) : null,
           contracts: contracts ? parseInt(contracts) : null,
-          premium_paid: premiumPaid ? parseFloat(premiumPaid) : null,
           pnl: pnl ? parseFloat(pnl) : null,
           notes: notes || null,
           screenshot_urls: filteredUrls.length > 0 ? filteredUrls : null,
+          emotion: emotion || null,
+          followed_plan: followedPlan || null,
+          what_went_right: whatWentRight || null,
+          what_went_wrong: whatWentWrong || null,
+          lessons: lessons || null,
         })
         .eq('id', tradeId)
       if (error) throw error
@@ -156,6 +224,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
       setSubmitting(false)
     }
   }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#EDE8DF]">
@@ -177,6 +246,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
       </div>
     )
   }
+
   if (notFound) {
     return (
       <div className="min-h-screen bg-[#EDE8DF]">
@@ -191,9 +261,47 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
       </div>
     )
   }
+
   return (
     <div className="min-h-screen bg-[#EDE8DF]">
       <NavBar userEmail={userEmail} />
+
+      {/* Add Setup Type Modal */}
+      {showAddSetup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+            <h3 className="text-base font-bold text-[#0D0D1A] mb-1">Add Setup Type</h3>
+            <p className="text-xs text-[#0D0D1A]/50 mb-4">Create a custom setup for your strategy</p>
+            <input
+              type="text"
+              value={newSetupName}
+              onChange={(e) => setNewSetupName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddSetupType()}
+              placeholder="e.g. VWAP Reclaim"
+              className={inputClass}
+              autoFocus
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={handleAddSetupType}
+                disabled={savingSetup || !newSetupName.trim()}
+                className="flex-1 bg-[#0D0D1A] text-white rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+              >
+                {savingSetup ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowAddSetup(false); setNewSetupName('') }}
+                className="px-4 py-2.5 rounded-xl border border-[#E2DDD6] text-[#0D0D1A]/70 text-sm font-medium hover:bg-[#EDE8DF]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-3xl mx-auto pt-24 pb-28 px-4 space-y-6">
         {/* Page Header */}
         <div className="flex items-center justify-between">
@@ -208,6 +316,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
             ← Cancel
           </Link>
         </div>
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Trade Details */}
           <div className={sectionClass}>
@@ -235,7 +344,8 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
                 />
               </div>
             </div>
-            {/* Direction Toggle */}
+
+            {/* Direction — 3 options */}
             <div>
               <label className={labelClass}>Direction</label>
               <div className="flex gap-2">
@@ -261,26 +371,38 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
                 >
                   Short ↓
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setDirection('straddle')}
+                  className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                    direction === 'straddle'
+                      ? 'bg-[#8B5CF6] text-white border-[#8B5CF6]'
+                      : 'bg-white text-[#0D0D1A]/60 border-[#E2DDD6] hover:border-[#8B5CF6]/50'
+                  }`}
+                >
+                  Straddle ⟺
+                </button>
               </div>
             </div>
-            {/* Setup Type */}
+
+            {/* Setup Type — dynamic */}
             <div>
               <label className={labelClass}>Setup Type</label>
               <select
                 value={setupType}
-                onChange={(e) => setSetupType(e.target.value)}
+                onChange={(e) => handleSetupChange(e.target.value)}
                 className={inputClass}
                 required
               >
                 <option value="">Select a setup...</option>
-                {SETUP_TYPES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
+                {allSetupTypes.map((s) => (
+                  <option key={s} value={s}>{s}</option>
                 ))}
+                <option value="__add_new__">+ Add new type</option>
               </select>
             </div>
           </div>
+
           {/* CKSR Framework */}
           <div className={sectionClass}>
             <h2 className={sectionTitleClass}>CKSR Framework</h2>
@@ -347,6 +469,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
               />
             </div>
           </div>
+
           {/* Execution */}
           <div className={sectionClass}>
             <h2 className={sectionTitleClass}>Execution</h2>
@@ -356,7 +479,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
                 <input
                   type="number"
                   value={entryPrice}
-                  onChange={(e) => { setEntryPrice(e.target.value); setAutoCalcPnl(true) }}
+                  onChange={(e) => setEntryPrice(e.target.value)}
                   placeholder="e.g. 4.50"
                   step="0.01"
                   min="0"
@@ -368,7 +491,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
                 <input
                   type="number"
                   value={exitPrice}
-                  onChange={(e) => { setExitPrice(e.target.value); setAutoCalcPnl(true) }}
+                  onChange={(e) => setExitPrice(e.target.value)}
                   placeholder="e.g. 6.80"
                   step="0.01"
                   min="0"
@@ -380,45 +503,27 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
                 <input
                   type="number"
                   value={contracts}
-                  onChange={(e) => { setContracts(e.target.value); setAutoCalcPnl(true) }}
+                  onChange={(e) => setContracts(e.target.value)}
                   placeholder="e.g. 5"
                   step="1"
                   min="0"
                   className={inputClass}
                 />
               </div>
-              <div>
-                <label className={labelClass}>Premium Paid ($ per contract)</label>
-                <input
-                  type="number"
-                  value={premiumPaid}
-                  onChange={(e) => { setPremiumPaid(e.target.value); setAutoCalcPnl(true) }}
-                  placeholder="e.g. 4.50"
-                  step="0.01"
-                  min="0"
-                  className={inputClass}
-                />
-              </div>
             </div>
             <div>
-              <label className={labelClass}>
-                P&L ($)
-                {autoCalcPnl && entryPrice && exitPrice && contracts && premiumPaid && (
-                  <span className="ml-2 text-[#0D0D1A]/40 normal-case font-normal">
-                    (auto-calculated — edit to override)
-                  </span>
-                )}
-              </label>
+              <label className={labelClass}>P&L ($)</label>
               <input
                 type="number"
                 value={pnl}
-                onChange={(e) => { setPnl(e.target.value); setAutoCalcPnl(false) }}
+                onChange={(e) => setPnl(e.target.value)}
                 placeholder="e.g. 1150.00"
                 step="0.01"
                 className={inputClass}
               />
             </div>
           </div>
+
           {/* Notes & Screenshots */}
           <div className={sectionClass}>
             <h2 className={sectionTitleClass}>Notes & Screenshots</h2>
@@ -427,7 +532,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Trade rationale, emotions, lessons learned..."
+                placeholder="Trade rationale, additional context..."
                 rows={4}
                 className={`${inputClass} resize-y`}
               />
@@ -465,6 +570,83 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
               </div>
             </div>
           </div>
+
+          {/* Trade Journal */}
+          <div className={sectionClass}>
+            <h2 className={sectionTitleClass}>📓 Trade Journal</h2>
+
+            <div>
+              <label className={labelClass}>Emotion</label>
+              <select
+                value={emotion}
+                onChange={(e) => setEmotion(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Select emotion...</option>
+                {EMOTIONS.map((em) => (
+                  <option key={em} value={em}>{em}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Followed Your Plan?</label>
+              <div className="flex gap-2">
+                {(['yes', 'partially', 'no'] as const).map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setFollowedPlan(followedPlan === val ? '' : val)}
+                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                      followedPlan === val
+                        ? val === 'yes'
+                          ? 'bg-[#22C55E] text-white border-[#22C55E]'
+                          : val === 'no'
+                          ? 'bg-[#EF4444] text-white border-[#EF4444]'
+                          : 'bg-[#F59E0B] text-white border-[#F59E0B]'
+                        : 'bg-white text-[#0D0D1A]/60 border-[#E2DDD6] hover:border-[#0D0D1A]/30'
+                    }`}
+                  >
+                    {val === 'yes' ? 'Yes' : val === 'partially' ? 'Partially' : 'No'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className={labelClass}>What did you do right?</label>
+              <textarea
+                value={whatWentRight}
+                onChange={(e) => setWhatWentRight(e.target.value)}
+                placeholder="e.g. Waited for confirmation, sized appropriately..."
+                rows={3}
+                className={`${inputClass} resize-y`}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>What went wrong?</label>
+              <textarea
+                value={whatWentWrong}
+                onChange={(e) => setWhatWentWrong(e.target.value)}
+                placeholder="e.g. Entered too early, moved stop too soon..."
+                rows={3}
+                className={`${inputClass} resize-y`}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>Lessons Learned</label>
+              <textarea
+                value={lessons}
+                onChange={(e) => setLessons(e.target.value)}
+                placeholder="e.g. Wait for the pullback before entering..."
+                rows={3}
+                className={`${inputClass} resize-y`}
+              />
+            </div>
+          </div>
+
           {/* Actions */}
           <div className="flex gap-3">
             <button

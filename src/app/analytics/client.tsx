@@ -9,11 +9,15 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from 'recharts'
 import { createClient } from '@/lib/supabase/client'
 import NavBar from '@/components/NavBar'
 import MobileNav from '@/components/MobileNav'
 import { Skeleton } from '@/components/ui/skeleton'
+
 const SETUPS = [
   '30-Min ORB',
   'Gap Strategy',
@@ -21,6 +25,7 @@ const SETUPS = [
   'Key Level Reaction',
   'Broadening Formation Breakout',
 ] as const
+
 const SETUP_SHORT: Record<string, string> = {
   '30-Min ORB': 'ORB',
   'Gap Strategy': 'Gap',
@@ -28,16 +33,28 @@ const SETUP_SHORT: Record<string, string> = {
   'Key Level Reaction': 'KLR',
   'Broadening Formation Breakout': 'BFB',
 }
+
+const EMOTIONS = ['Calm', 'Confident', 'Focused', 'Anxious', 'FOMO', 'Frustrated', 'Overconfident', 'Greedy', 'Patient', 'Neutral']
+
+const EMOTION_CATEGORY: Record<string, 'positive' | 'neutral' | 'negative'> = {
+  Calm: 'positive', Confident: 'positive', Focused: 'positive', Patient: 'positive',
+  Neutral: 'neutral',
+  Anxious: 'negative', FOMO: 'negative', Frustrated: 'negative', Overconfident: 'negative', Greedy: 'negative',
+}
+
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+
 interface Trade {
   id: string
   user_id: string
   date: string
   ticker: string
   setup: string
-  direction: 'Long' | 'Short'
+  direction: 'Long' | 'Short' | 'Straddle'
   pnl: number | null
+  emotion?: string | null
 }
+
 interface SetupStat {
   setup: string
   shortName: string
@@ -45,14 +62,31 @@ interface SetupStat {
   totalPnl: number
   tradeCount: number
 }
+
 interface DayOfWeekStat {
   day: string
   pnl: number
 }
+
 interface MonthStat {
   month: string
   pnl: number
 }
+
+interface EmotionStat {
+  emotion: string
+  winRate: number
+  tradeCount: number
+  category: 'positive' | 'neutral' | 'negative'
+}
+
+interface TimelineDot {
+  x: number
+  y: number
+  date: string
+  emotion: string
+}
+
 function formatDollar(v: number): string {
   const abs = Math.abs(v)
   const formatted =
@@ -61,11 +95,13 @@ function formatDollar(v: number): string {
       : `$${abs.toFixed(0)}`
   return v < 0 ? `-${formatted}` : formatted
 }
+
 interface CustomBarTooltipProps {
   active?: boolean
   payload?: Array<{ value: number; dataKey: string }>
   label?: string
 }
+
 function CustomBarTooltip({ active, payload, label }: CustomBarTooltipProps) {
   if (active && payload && payload.length) {
     const value = payload[0].value
@@ -81,26 +117,53 @@ function CustomBarTooltip({ active, payload, label }: CustomBarTooltipProps) {
   }
   return null
 }
+
 interface WinRateTooltipProps {
   active?: boolean
-  payload?: Array<{ value: number }>
+  payload?: Array<{ value: number; payload: EmotionStat }>
   label?: string
 }
+
 function WinRateTooltip({ active, payload, label }: WinRateTooltipProps) {
   if (active && payload && payload.length) {
+    const stat = payload[0].payload
     return (
       <div className="bg-[#0D0D1A] text-white rounded-xl px-4 py-3 shadow-lg text-sm">
         <p className="text-white/60 mb-1">{label}</p>
         <p className="font-semibold text-[#22C55E]">{payload[0].value.toFixed(1)}%</p>
+        <p className="text-white/40 text-xs mt-0.5">{stat.tradeCount} trade{stat.tradeCount !== 1 ? 's' : ''}</p>
       </div>
     )
   }
   return null
 }
+
+interface ScatterTooltipProps {
+  active?: boolean
+  payload?: Array<{ payload: TimelineDot }>
+}
+
+function ScatterTooltip({ active, payload }: ScatterTooltipProps) {
+  if (active && payload && payload.length) {
+    const d = payload[0].payload
+    return (
+      <div className="bg-[#0D0D1A] text-white rounded-xl px-4 py-3 shadow-lg text-sm">
+        <p className="text-white/60 mb-1">{d.date}</p>
+        <p className={`font-semibold ${d.y >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+          {d.y >= 0 ? '+' : ''}${Math.abs(d.y).toFixed(2)}
+        </p>
+        {d.emotion && <p className="text-white/50 text-xs mt-0.5">{d.emotion}</p>}
+      </div>
+    )
+  }
+  return null
+}
+
 export default function AnalyticsPage() {
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState<string | undefined>(undefined)
+
   const fetchTrades = useCallback(async () => {
     setLoading(true)
     try {
@@ -120,11 +183,12 @@ export default function AnalyticsPage() {
       setLoading(false)
     }
   }, [])
+
   useEffect(() => {
     fetchTrades()
   }, [fetchTrades])
-  // ─── Computed analytics ───────────────────────────────────────────────────
-  // 1. Win rate & P&L by setup
+
+  // ─── Setup stats ──────────────────────────────────────────────────────────
   const setupStats: SetupStat[] = SETUPS.map((setup) => {
     const setupTrades = trades.filter((t) => t.setup === setup)
     const wins = setupTrades.filter((t) => (t.pnl ?? 0) > 0).length
@@ -138,10 +202,10 @@ export default function AnalyticsPage() {
       tradeCount: setupTrades.length,
     }
   })
-  // 2. P&L by day of week
+
+  // ─── Day of week stats ────────────────────────────────────────────────────
   const pnlByDayOfWeek: DayOfWeekStat[] = DAYS_OF_WEEK.map((day) => {
     const dayIndex = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].indexOf(day)
-    // getDay(): 0=Sun, 1=Mon, ..., 5=Fri
     const targetDay = dayIndex + 1
     const dayTrades = trades.filter((t) => {
       const [year, month, d] = t.date.split('-').map(Number)
@@ -151,42 +215,78 @@ export default function AnalyticsPage() {
     const pnl = dayTrades.reduce((sum, t) => sum + (t.pnl ?? 0), 0)
     return { day, pnl: parseFloat(pnl.toFixed(2)) }
   })
-  // 3. P&L by month
+
+  // ─── Monthly P&L ──────────────────────────────────────────────────────────
   const monthMap: Record<string, number> = {}
   for (const trade of trades) {
-    const month = trade.date.slice(0, 7) // YYYY-MM
+    const month = trade.date.slice(0, 7)
     monthMap[month] = (monthMap[month] ?? 0) + (trade.pnl ?? 0)
   }
   const pnlByMonth: MonthStat[] = Object.entries(monthMap)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, pnl]) => ({
-      month,
-      pnl: parseFloat(pnl.toFixed(2)),
-    }))
-  // Format month label: "2025-03" → "Mar '25"
+    .map(([month, pnl]) => ({ month, pnl: parseFloat(pnl.toFixed(2)) }))
+
   function formatMonth(m: string): string {
     const [year, month] = m.split('-')
     const date = new Date(parseInt(year), parseInt(month) - 1, 1)
     return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
   }
-  // 4. Avg winner / loser
+
+  // ─── Summary stats ────────────────────────────────────────────────────────
   const winners = trades.filter((t) => (t.pnl ?? 0) > 0)
   const losers = trades.filter((t) => (t.pnl ?? 0) < 0)
-  const avgWinner =
-    winners.length > 0
-      ? winners.reduce((sum, t) => sum + (t.pnl ?? 0), 0) / winners.length
-      : 0
-  const avgLoser =
-    losers.length > 0
-      ? losers.reduce((sum, t) => sum + (t.pnl ?? 0), 0) / losers.length
-      : 0
-  // Best setup (highest total P&L with at least 1 trade)
-  const bestSetup = setupStats
-    .filter((s) => s.tradeCount > 0)
-    .sort((a, b) => b.totalPnl - a.totalPnl)[0]
-  // Best day of week
+  const avgWinner = winners.length > 0
+    ? winners.reduce((sum, t) => sum + (t.pnl ?? 0), 0) / winners.length : 0
+  const avgLoser = losers.length > 0
+    ? losers.reduce((sum, t) => sum + (t.pnl ?? 0), 0) / losers.length : 0
+  const bestSetup = setupStats.filter((s) => s.tradeCount > 0).sort((a, b) => b.totalPnl - a.totalPnl)[0]
   const bestDay = [...pnlByDayOfWeek].sort((a, b) => b.pnl - a.pnl)[0]
+
+  // ─── Emotion stats ────────────────────────────────────────────────────────
+  const emotionStats: EmotionStat[] = EMOTIONS.map((emotion) => {
+    const emotionTrades = trades.filter((t) => t.emotion === emotion)
+    const wins = emotionTrades.filter((t) => (t.pnl ?? 0) > 0).length
+    const winRate = emotionTrades.length > 0 ? (wins / emotionTrades.length) * 100 : 0
+    return {
+      emotion,
+      winRate: parseFloat(winRate.toFixed(1)),
+      tradeCount: emotionTrades.length,
+      category: EMOTION_CATEGORY[emotion] ?? 'neutral',
+    }
+  }).filter((s) => s.tradeCount > 0)
+
+  const hasEmotionData = emotionStats.length > 0
+
+  // ─── Timeline scatter data ────────────────────────────────────────────────
+  const timelineDots: TimelineDot[] = trades
+    .filter((t) => t.pnl !== null)
+    .map((t) => {
+      const [year, month, day] = t.date.split('-').map(Number)
+      return {
+        x: new Date(year, month - 1, day).getTime(),
+        y: t.pnl ?? 0,
+        date: t.date,
+        emotion: t.emotion ?? '',
+      }
+    })
+
+  const greenDots = timelineDots.filter((d) => EMOTION_CATEGORY[d.emotion] === 'positive' || (!d.emotion && d.y > 0))
+  const yellowDots = timelineDots.filter((d) => d.emotion === 'Neutral' || (!d.emotion && d.y === 0))
+  const redDots = timelineDots.filter((d) => EMOTION_CATEGORY[d.emotion] === 'negative')
+  const untaggedDots = timelineDots.filter((d) => !d.emotion && d.y !== 0 && EMOTION_CATEGORY[d.emotion] === undefined)
+
+  // Separate by actual emotion category only when emotion is set
+  const positiveDots = timelineDots.filter((d) => d.emotion && EMOTION_CATEGORY[d.emotion] === 'positive')
+  const neutralDots = timelineDots.filter((d) => d.emotion === 'Neutral')
+  const negativeDots = timelineDots.filter((d) => d.emotion && EMOTION_CATEGORY[d.emotion] === 'negative')
+  const noEmotionDots = timelineDots.filter((d) => !d.emotion)
+
+  const xDomain = timelineDots.length > 0
+    ? [Math.min(...timelineDots.map((d) => d.x)), Math.max(...timelineDots.map((d) => d.x))]
+    : ['auto', 'auto']
+
   const isEmpty = trades.length === 0
+
   return (
     <div className="min-h-screen bg-[#EDE8DF]">
       <NavBar userEmail={userEmail} />
@@ -199,34 +299,24 @@ export default function AnalyticsPage() {
               Performance insights across your trade history.
             </p>
           </div>
+
           {/* Loading */}
           {loading && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[...Array(4)].map((_, i) => (
-                <div
-                  key={i}
-                  className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6"
-                >
+                <div key={i} className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
                   <Skeleton className="h-5 w-36 rounded-lg mb-4" />
                   <Skeleton className="h-[250px] w-full rounded-xl" />
                 </div>
               ))}
             </div>
           )}
+
           {/* Empty state */}
           {!loading && isEmpty && (
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <div className="w-16 h-16 rounded-2xl bg-white border border-[#E2DDD6] flex items-center justify-center mb-4 shadow-sm">
-                <svg
-                  width="28"
-                  height="28"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#0D0D1A"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0D0D1A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="20" x2="18" y2="10" />
                   <line x1="12" y1="20" x2="12" y2="4" />
                   <line x1="6" y1="20" x2="6" y2="14" />
@@ -238,6 +328,7 @@ export default function AnalyticsPage() {
               </p>
             </div>
           )}
+
           {/* Charts */}
           {!loading && !isEmpty && (
             <>
@@ -246,25 +337,10 @@ export default function AnalyticsPage() {
                 <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
                   <h2 className="text-base font-semibold text-[#0D0D1A] mb-4">Win Rate by Setup</h2>
                   <ResponsiveContainer width="100%" height={250}>
-                    <BarChart
-                      data={setupStats}
-                      margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
-                    >
+                    <BarChart data={setupStats} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" vertical={false} />
-                      <XAxis
-                        dataKey="shortName"
-                        tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(v: number) => `${v}%`}
-                        domain={[0, 100]}
-                        width={36}
-                      />
+                      <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} domain={[0, 100]} width={36} />
                       <Tooltip content={<WinRateTooltip />} />
                       <Bar dataKey="winRate" radius={[6, 6, 0, 0]}>
                         {setupStats.map((entry, index) => (
@@ -274,75 +350,43 @@ export default function AnalyticsPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+
                 {/* Chart 2: P&L by Setup */}
                 <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
                   <h2 className="text-base font-semibold text-[#0D0D1A] mb-4">P&amp;L by Setup</h2>
                   <ResponsiveContainer width="100%" height={250}>
-                    <BarChart
-                      data={setupStats}
-                      margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
-                    >
+                    <BarChart data={setupStats} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" vertical={false} />
-                      <XAxis
-                        dataKey="shortName"
-                        tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={formatDollar}
-                        width={48}
-                      />
+                      <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} tickFormatter={formatDollar} width={48} />
                       <Tooltip content={<CustomBarTooltip />} />
                       <Bar dataKey="totalPnl" radius={[6, 6, 0, 0]}>
                         {setupStats.map((entry, index) => (
-                          <Cell
-                            key={index}
-                            fill={entry.totalPnl >= 0 ? '#22C55E' : '#EF4444'}
-                            fillOpacity={entry.tradeCount > 0 ? 1 : 0.2}
-                          />
+                          <Cell key={index} fill={entry.totalPnl >= 0 ? '#22C55E' : '#EF4444'} fillOpacity={entry.tradeCount > 0 ? 1 : 0.2} />
                         ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+
                 {/* Chart 3: P&L by Day of Week */}
                 <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
                   <h2 className="text-base font-semibold text-[#0D0D1A] mb-4">P&amp;L by Day of Week</h2>
                   <ResponsiveContainer width="100%" height={250}>
-                    <BarChart
-                      data={pnlByDayOfWeek}
-                      margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
-                    >
+                    <BarChart data={pnlByDayOfWeek} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" vertical={false} />
-                      <XAxis
-                        dataKey="day"
-                        tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={formatDollar}
-                        width={48}
-                      />
+                      <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} tickFormatter={formatDollar} width={48} />
                       <Tooltip content={<CustomBarTooltip />} />
                       <Bar dataKey="pnl" radius={[6, 6, 0, 0]}>
                         {pnlByDayOfWeek.map((entry, index) => (
-                          <Cell
-                            key={index}
-                            fill={entry.pnl >= 0 ? '#22C55E' : '#EF4444'}
-                          />
+                          <Cell key={index} fill={entry.pnl >= 0 ? '#22C55E' : '#EF4444'} />
                         ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+
                 {/* Chart 4: Monthly P&L */}
                 <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
                   <h2 className="text-base font-semibold text-[#0D0D1A] mb-4">Monthly P&amp;L</h2>
@@ -352,31 +396,14 @@ export default function AnalyticsPage() {
                     </div>
                   ) : (
                     <ResponsiveContainer width="100%" height={250}>
-                      <BarChart
-                        data={pnlByMonth.map((m) => ({ ...m, label: formatMonth(m.month) }))}
-                        margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
-                      >
+                      <BarChart data={pnlByMonth.map((m) => ({ ...m, label: formatMonth(m.month) }))} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                         <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" vertical={false} />
-                        <XAxis
-                          dataKey="label"
-                          tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }}
-                          axisLine={false}
-                          tickLine={false}
-                          tickFormatter={formatDollar}
-                          width={48}
-                        />
+                        <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} tickFormatter={formatDollar} width={48} />
                         <Tooltip content={<CustomBarTooltip />} />
                         <Bar dataKey="pnl" radius={[6, 6, 0, 0]}>
                           {pnlByMonth.map((entry, index) => (
-                            <Cell
-                              key={index}
-                              fill={entry.pnl >= 0 ? '#22C55E' : '#EF4444'}
-                            />
+                            <Cell key={index} fill={entry.pnl >= 0 ? '#22C55E' : '#EF4444'} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -384,61 +411,37 @@ export default function AnalyticsPage() {
                   )}
                 </div>
               </div>
+
               {/* Summary stats row */}
-              <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6 mb-6">
                 <h2 className="text-base font-semibold text-[#0D0D1A] mb-4">Summary</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  {/* Avg Winner */}
                   <div>
-                    <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-1">
-                      Avg Winner
-                    </p>
+                    <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-1">Avg Winner</p>
                     <p className="text-xl font-bold text-[#22C55E]">
-                      {winners.length > 0
-                        ? `+$${avgWinner.toLocaleString('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}`
-                        : '—'}
+                      {winners.length > 0 ? `+$${avgWinner.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                     </p>
                   </div>
-                  {/* Avg Loser */}
                   <div>
-                    <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-1">
-                      Avg Loser
-                    </p>
+                    <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-1">Avg Loser</p>
                     <p className="text-xl font-bold text-[#EF4444]">
-                      {losers.length > 0
-                        ? `-$${Math.abs(avgLoser).toLocaleString('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}`
-                        : '—'}
+                      {losers.length > 0 ? `-$${Math.abs(avgLoser).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                     </p>
                   </div>
-                  {/* Best Setup */}
                   <div>
-                    <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-1">
-                      Best Setup
-                    </p>
+                    <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-1">Best Setup</p>
                     <p className="text-lg font-bold text-[#0D0D1A]">
                       {bestSetup ? SETUP_SHORT[bestSetup.setup] ?? bestSetup.setup : '—'}
                     </p>
                     {bestSetup && bestSetup.tradeCount > 0 && (
                       <p className="text-xs text-[#0D0D1A]/40 mt-0.5">
-                        {bestSetup.totalPnl >= 0 ? '+' : ''}$
-                        {Math.abs(bestSetup.totalPnl).toFixed(2)}
+                        {bestSetup.totalPnl >= 0 ? '+' : ''}${Math.abs(bestSetup.totalPnl).toFixed(2)}
                       </p>
                     )}
                   </div>
-                  {/* Best Day */}
                   <div>
-                    <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-1">
-                      Best Day
-                    </p>
-                    <p className="text-lg font-bold text-[#0D0D1A]">
-                      {bestDay ? bestDay.day : '—'}
-                    </p>
+                    <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-1">Best Day</p>
+                    <p className="text-lg font-bold text-[#0D0D1A]">{bestDay ? bestDay.day : '—'}</p>
                     {bestDay && (
                       <p className="text-xs text-[#0D0D1A]/40 mt-0.5">
                         {bestDay.pnl >= 0 ? '+' : ''}${Math.abs(bestDay.pnl).toFixed(2)}
@@ -446,6 +449,116 @@ export default function AnalyticsPage() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* Emotion & Performance */}
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-lg font-bold text-[#0D0D1A] mb-1">Emotion & Performance</h2>
+                  <p className="text-sm text-[#0D0D1A]/50">How your emotional state correlates with trading outcomes.</p>
+                </div>
+
+                {!hasEmotionData ? (
+                  <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-8 text-center">
+                    <p className="text-sm text-[#0D0D1A]/40">Log trades with emotion data to see this chart.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Emotion Win Rate bar chart */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
+                      <h3 className="text-base font-semibold text-[#0D0D1A] mb-1">Win Rate by Emotion</h3>
+                      <p className="text-xs text-[#0D0D1A]/40 mb-4">Green = focused mindset · Red = reactive mindset</p>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart
+                          data={emotionStats}
+                          margin={{ top: 4, right: 8, left: 0, bottom: 24 }}
+                          layout="vertical"
+                        >
+                          <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" horizontal={false} />
+                          <XAxis
+                            type="number"
+                            domain={[0, 100]}
+                            tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6 }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(v: number) => `${v}%`}
+                          />
+                          <YAxis
+                            type="category"
+                            dataKey="emotion"
+                            tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.7 }}
+                            axisLine={false}
+                            tickLine={false}
+                            width={80}
+                          />
+                          <Tooltip content={<WinRateTooltip />} />
+                          <Bar dataKey="winRate" radius={[0, 6, 6, 0]}>
+                            {emotionStats.map((entry, index) => (
+                              <Cell
+                                key={index}
+                                fill={
+                                  entry.category === 'positive' ? '#22C55E'
+                                  : entry.category === 'negative' ? '#EF4444'
+                                  : '#F59E0B'
+                                }
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Emotion P&L timeline scatter */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
+                      <h3 className="text-base font-semibold text-[#0D0D1A] mb-1">P&amp;L Timeline by Emotion</h3>
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="flex items-center gap-1 text-xs text-[#0D0D1A]/50">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#22C55E]" /> Positive
+                        </span>
+                        <span className="flex items-center gap-1 text-xs text-[#0D0D1A]/50">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#F59E0B]" /> Neutral
+                        </span>
+                        <span className="flex items-center gap-1 text-xs text-[#0D0D1A]/50">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#EF4444]" /> Negative
+                        </span>
+                        <span className="flex items-center gap-1 text-xs text-[#0D0D1A]/50">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#CBD5E1]" /> Untagged
+                        </span>
+                      </div>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <ScatterChart margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                          <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" />
+                          <XAxis
+                            dataKey="x"
+                            type="number"
+                            domain={xDomain as [number, number]}
+                            scale="time"
+                            tickFormatter={(v: number) =>
+                              new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            }
+                            tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6 }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            dataKey="y"
+                            tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6 }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={formatDollar}
+                            width={48}
+                          />
+                          <ZAxis range={[40, 40]} />
+                          <Tooltip content={<ScatterTooltip />} />
+                          <Scatter data={positiveDots} fill="#22C55E" fillOpacity={0.85} />
+                          <Scatter data={neutralDots} fill="#F59E0B" fillOpacity={0.85} />
+                          <Scatter data={negativeDots} fill="#EF4444" fillOpacity={0.85} />
+                          <Scatter data={noEmotionDots} fill="#CBD5E1" fillOpacity={0.6} />
+                        </ScatterChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}

@@ -8,12 +8,17 @@ import { toast } from 'sonner'
 import NavBar from '@/components/NavBar'
 import MobileNav from '@/components/MobileNav'
 
-const SETUP_TYPES = [
+const DEFAULT_SETUP_TYPES = [
   '30-Min ORB',
   'Gap Strategy',
   '4H Reversal',
   'Key Level Reaction',
   'Broadening Formation Breakout',
+]
+
+const EMOTIONS = [
+  'Calm', 'Confident', 'Focused', 'Anxious', 'FOMO',
+  'Frustrated', 'Overconfident', 'Greedy', 'Patient', 'Neutral',
 ]
 
 const inputClass =
@@ -34,12 +39,19 @@ export default function NewTradePage() {
   const supabase = createClient()
 
   const [userEmail, setUserEmail] = useState<string | undefined>()
+  const [userId, setUserId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  // Custom setup types
+  const [customSetupTypes, setCustomSetupTypes] = useState<string[]>([])
+  const [showAddSetup, setShowAddSetup] = useState(false)
+  const [newSetupName, setNewSetupName] = useState('')
+  const [savingSetup, setSavingSetup] = useState(false)
 
   // Form state
   const [date, setDate] = useState(today())
   const [ticker, setTicker] = useState('')
-  const [direction, setDirection] = useState<'long' | 'short'>('long')
+  const [direction, setDirection] = useState<'long' | 'short' | 'straddle'>('long')
   const [setupType, setSetupType] = useState('')
   const [catalyst, setCatalyst] = useState('')
   const [keyLevel, setKeyLevel] = useState('')
@@ -48,10 +60,16 @@ export default function NewTradePage() {
   const [entryPrice, setEntryPrice] = useState('')
   const [exitPrice, setExitPrice] = useState('')
   const [contracts, setContracts] = useState('')
-  const [premiumPaid, setPremiumPaid] = useState('')
   const [pnl, setPnl] = useState('')
   const [notes, setNotes] = useState('')
   const [screenshotUrls, setScreenshotUrls] = useState<string[]>([''])
+
+  // Journal state
+  const [emotion, setEmotion] = useState('')
+  const [followedPlan, setFollowedPlan] = useState<'yes' | 'no' | 'partially' | ''>('')
+  const [whatWentRight, setWhatWentRight] = useState('')
+  const [whatWentWrong, setWhatWentWrong] = useState('')
+  const [lessons, setLessons] = useState('')
 
   useEffect(() => {
     async function loadUser() {
@@ -61,22 +79,48 @@ export default function NewTradePage() {
         return
       }
       setUserEmail(user.email)
+      setUserId(user.id)
+
+      const { data } = await supabase
+        .from('custom_setup_types')
+        .select('name')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+      setCustomSetupTypes(data?.map((r: { name: string }) => r.name) ?? [])
     }
     loadUser()
   }, [])
 
-  // Auto-calculate P&L hint
-  useEffect(() => {
-    const entry = parseFloat(entryPrice)
-    const exit = parseFloat(exitPrice)
-    const qty = parseFloat(contracts)
-    const premium = parseFloat(premiumPaid)
+  const allSetupTypes = [...DEFAULT_SETUP_TYPES, ...customSetupTypes]
 
-    if (!isNaN(entry) && !isNaN(exit) && !isNaN(qty) && !isNaN(premium)) {
-      const calc = (exit - entry) * qty * 100 - premium * qty
-      setPnl(calc.toFixed(2))
+  async function handleAddSetupType() {
+    const name = newSetupName.trim()
+    if (!name || !userId) return
+    setSavingSetup(true)
+    try {
+      const { error } = await supabase
+        .from('custom_setup_types')
+        .insert({ user_id: userId, name })
+      if (error) throw error
+      setCustomSetupTypes((prev) => [...prev, name])
+      setSetupType(name)
+      setNewSetupName('')
+      setShowAddSetup(false)
+      toast.success('Setup type added!')
+    } catch {
+      toast.error('Failed to save setup type.')
+    } finally {
+      setSavingSetup(false)
     }
-  }, [entryPrice, exitPrice, contracts, premiumPaid])
+  }
+
+  function handleSetupChange(value: string) {
+    if (value === '__add_new__') {
+      setShowAddSetup(true)
+    } else {
+      setSetupType(value)
+    }
+  }
 
   function addScreenshotUrl() {
     setScreenshotUrls((prev) => [...prev, ''])
@@ -123,10 +167,14 @@ export default function NewTradePage() {
         entry_price: entryPrice ? parseFloat(entryPrice) : null,
         exit_price: exitPrice ? parseFloat(exitPrice) : null,
         contracts: contracts ? parseInt(contracts) : null,
-        premium_paid: premiumPaid ? parseFloat(premiumPaid) : null,
         pnl: pnl ? parseFloat(pnl) : null,
         notes: notes || null,
         screenshot_urls: filteredUrls.length > 0 ? filteredUrls : null,
+        emotion: emotion || null,
+        followed_plan: followedPlan || null,
+        what_went_right: whatWentRight || null,
+        what_went_wrong: whatWentWrong || null,
+        lessons: lessons || null,
       })
 
       if (error) throw error
@@ -144,6 +192,42 @@ export default function NewTradePage() {
   return (
     <div className="min-h-screen bg-[#EDE8DF]">
       <NavBar userEmail={userEmail} />
+
+      {/* Add Setup Type Modal */}
+      {showAddSetup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+            <h3 className="text-base font-bold text-[#0D0D1A] mb-1">Add Setup Type</h3>
+            <p className="text-xs text-[#0D0D1A]/50 mb-4">Create a custom setup for your strategy</p>
+            <input
+              type="text"
+              value={newSetupName}
+              onChange={(e) => setNewSetupName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddSetupType()}
+              placeholder="e.g. VWAP Reclaim"
+              className={inputClass}
+              autoFocus
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={handleAddSetupType}
+                disabled={savingSetup || !newSetupName.trim()}
+                className="flex-1 bg-[#0D0D1A] text-white rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+              >
+                {savingSetup ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowAddSetup(false); setNewSetupName('') }}
+                className="px-4 py-2.5 rounded-xl border border-[#E2DDD6] text-[#0D0D1A]/70 text-sm font-medium hover:bg-[#EDE8DF]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-3xl mx-auto pt-24 pb-28 px-4 space-y-6">
         {/* Page Header */}
@@ -165,7 +249,6 @@ export default function NewTradePage() {
           <div className={sectionClass}>
             <h2 className={sectionTitleClass}>Trade Details</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Date */}
               <div>
                 <label className={labelClass}>Date</label>
                 <input
@@ -176,8 +259,6 @@ export default function NewTradePage() {
                   required
                 />
               </div>
-
-              {/* Ticker */}
               <div>
                 <label className={labelClass}>Ticker</label>
                 <input
@@ -191,7 +272,7 @@ export default function NewTradePage() {
               </div>
             </div>
 
-            {/* Direction Toggle */}
+            {/* Direction — 3 options */}
             <div>
               <label className={labelClass}>Direction</label>
               <div className="flex gap-2">
@@ -217,24 +298,34 @@ export default function NewTradePage() {
                 >
                   Short ↓
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setDirection('straddle')}
+                  className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                    direction === 'straddle'
+                      ? 'bg-[#8B5CF6] text-white border-[#8B5CF6]'
+                      : 'bg-white text-[#0D0D1A]/60 border-[#E2DDD6] hover:border-[#8B5CF6]/50'
+                  }`}
+                >
+                  Straddle ⟺
+                </button>
               </div>
             </div>
 
-            {/* Setup Type */}
+            {/* Setup Type — dynamic */}
             <div>
               <label className={labelClass}>Setup Type</label>
               <select
                 value={setupType}
-                onChange={(e) => setSetupType(e.target.value)}
+                onChange={(e) => handleSetupChange(e.target.value)}
                 className={inputClass}
                 required
               >
                 <option value="">Select a setup...</option>
-                {SETUP_TYPES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
+                {allSetupTypes.map((s) => (
+                  <option key={s} value={s}>{s}</option>
                 ))}
+                <option value="__add_new__">+ Add new type</option>
               </select>
             </div>
           </div>
@@ -243,7 +334,6 @@ export default function NewTradePage() {
           <div className={sectionClass}>
             <h2 className={sectionTitleClass}>CKSR Framework</h2>
 
-            {/* C — Catalyst */}
             <div>
               <label className={labelClass}>
                 <span className="inline-flex items-center gap-2">
@@ -260,7 +350,6 @@ export default function NewTradePage() {
               />
             </div>
 
-            {/* K — Key Level */}
             <div>
               <label className={labelClass}>
                 <span className="inline-flex items-center gap-2">
@@ -277,7 +366,6 @@ export default function NewTradePage() {
               />
             </div>
 
-            {/* S — Strat Setup */}
             <div>
               <label className={labelClass}>
                 <span className="inline-flex items-center gap-2">
@@ -294,7 +382,6 @@ export default function NewTradePage() {
               />
             </div>
 
-            {/* R — Risk Amount */}
             <div>
               <label className={labelClass}>
                 <span className="inline-flex items-center gap-2">
@@ -354,30 +441,10 @@ export default function NewTradePage() {
                   className={inputClass}
                 />
               </div>
-              <div>
-                <label className={labelClass}>Premium Paid ($ per contract)</label>
-                <input
-                  type="number"
-                  value={premiumPaid}
-                  onChange={(e) => setPremiumPaid(e.target.value)}
-                  placeholder="e.g. 4.50"
-                  step="0.01"
-                  min="0"
-                  className={inputClass}
-                />
-              </div>
             </div>
 
-            {/* P&L */}
             <div>
-              <label className={labelClass}>
-                P&L ($)
-                {entryPrice && exitPrice && contracts && premiumPaid && (
-                  <span className="ml-2 text-[#0D0D1A]/40 normal-case font-normal">
-                    (auto-calculated — edit to override)
-                  </span>
-                )}
-              </label>
+              <label className={labelClass}>P&L ($)</label>
               <input
                 type="number"
                 value={pnl}
@@ -398,7 +465,7 @@ export default function NewTradePage() {
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Trade rationale, emotions, lessons learned..."
+                placeholder="Trade rationale, additional context..."
                 rows={4}
                 className={`${inputClass} resize-y`}
               />
@@ -435,6 +502,82 @@ export default function NewTradePage() {
                   + Add Screenshot URL
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* Trade Journal */}
+          <div className={sectionClass}>
+            <h2 className={sectionTitleClass}>📓 Trade Journal</h2>
+
+            <div>
+              <label className={labelClass}>Emotion</label>
+              <select
+                value={emotion}
+                onChange={(e) => setEmotion(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Select emotion...</option>
+                {EMOTIONS.map((em) => (
+                  <option key={em} value={em}>{em}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Followed Your Plan?</label>
+              <div className="flex gap-2">
+                {(['yes', 'partially', 'no'] as const).map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setFollowedPlan(followedPlan === val ? '' : val)}
+                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                      followedPlan === val
+                        ? val === 'yes'
+                          ? 'bg-[#22C55E] text-white border-[#22C55E]'
+                          : val === 'no'
+                          ? 'bg-[#EF4444] text-white border-[#EF4444]'
+                          : 'bg-[#F59E0B] text-white border-[#F59E0B]'
+                        : 'bg-white text-[#0D0D1A]/60 border-[#E2DDD6] hover:border-[#0D0D1A]/30'
+                    }`}
+                  >
+                    {val === 'yes' ? 'Yes' : val === 'partially' ? 'Partially' : 'No'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className={labelClass}>What did you do right?</label>
+              <textarea
+                value={whatWentRight}
+                onChange={(e) => setWhatWentRight(e.target.value)}
+                placeholder="e.g. Waited for confirmation, sized appropriately..."
+                rows={3}
+                className={`${inputClass} resize-y`}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>What went wrong?</label>
+              <textarea
+                value={whatWentWrong}
+                onChange={(e) => setWhatWentWrong(e.target.value)}
+                placeholder="e.g. Entered too early, moved stop too soon..."
+                rows={3}
+                className={`${inputClass} resize-y`}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>Lessons Learned</label>
+              <textarea
+                value={lessons}
+                onChange={(e) => setLessons(e.target.value)}
+                placeholder="e.g. Wait for the pullback before entering..."
+                rows={3}
+                className={`${inputClass} resize-y`}
+              />
             </div>
           </div>
 
