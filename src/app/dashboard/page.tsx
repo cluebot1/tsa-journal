@@ -128,87 +128,115 @@ export default async function DashboardPage() {
             </Link>
           </div>
 
-          {isEmpty ? (
-            /* ── Empty state ── */
-            <div className="flex flex-col items-center justify-center py-24 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-white border border-[#E2DDD6] flex items-center justify-center mb-4 shadow-sm">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0D0D1A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-              </div>
-              <h2 className="text-xl font-semibold text-[#0D0D1A] mb-2">No trades yet</h2>
-              <p className="text-sm text-[#0D0D1A]/50 mb-6 max-w-xs">
-                Start logging your trades to see your stats, equity curve, and performance insights here.
+          {/* ── Stats cards ── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {/* Total P&L */}
+            <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-5">
+              <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">
+                Total P&amp;L
               </p>
-              <Link
-                href="/trades/new"
-                className="bg-[#0D0D1A] text-white text-sm font-medium px-6 py-3 rounded-xl hover:opacity-90 transition-opacity"
-              >
-                Log Your First Trade
-              </Link>
+              {isEmpty ? (
+                <p className="text-xl font-bold text-[#0D0D1A]/30">—</p>
+              ) : (
+                <p
+                  className={`text-xl font-bold ${
+                    totalPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'
+                  }`}
+                >
+                  {totalPnl >= 0 ? '' : '-'}${Math.abs(totalPnl).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </p>
+              )}
+            </div>
+
+            {/* Win Rate */}
+            <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-5">
+              <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">
+                Win Rate
+              </p>
+              {isEmpty ? (
+                <p className="text-xl font-bold text-[#0D0D1A]/30">—</p>
+              ) : (
+                <p
+                  className={`text-xl font-bold ${
+                    winRate >= 50 ? 'text-[#22C55E]' : 'text-[#EF4444]'
+                  }`}
+                >
+                  {winRate.toFixed(1)}%
+                </p>
+              )}
+            </div>
+
+            {/* Total Trades */}
+            <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-5">
+              <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">
+                Total Trades
+              </p>
+              {isEmpty ? (
+                <p className="text-xl font-bold text-[#0D0D1A]/30">—</p>
+              ) : (
+                <p className="text-xl font-bold text-[#0D0D1A]">{totalTrades}</p>
+              )}
+            </div>
+
+            {/* Current Streak */}
+            <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-5">
+              <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">
+                Streak
+              </p>
+              {isEmpty ? (
+                <p className="text-xl font-bold text-[#0D0D1A]/30">—</p>
+              ) : (
+                <p
+                  className={`text-xl font-bold ${
+                    currentStreak === 0
+                      ? 'text-[#0D0D1A]'
+                      : streakIsWin
+                      ? 'text-[#22C55E]'
+                      : 'text-[#EF4444]'
+                  }`}
+                >
+                  {streakLabel}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {isEmpty ? (
+            /* ── Welcome empty state ── */
+            <div className="bg-white rounded-2xl border border-[#E2DDD6] p-8 text-center">
+              <div className="text-4xl mb-4">📊</div>
+              <h2 className="text-xl font-bold text-[#0D0D1A] mb-2">Welcome to your TSA Trade Journal</h2>
+              <p className="text-[#6B6B6B] text-sm mb-6 max-w-sm mx-auto">
+                Log your first trade to start tracking your edge. Every trade you log builds your data.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link href="/trades/new" className="bg-[#0D0D1A] text-white px-6 py-3 rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity">
+                  Log Your First Trade
+                </Link>
+                <Link href="/trades" className="bg-[#EDE8DF] text-[#0D0D1A] px-6 py-3 rounded-xl font-semibold text-sm hover:opacity-80 transition-opacity">
+                  Import CSV
+                </Link>
+              </div>
+              <div className="mt-8 grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-bold text-[#0D0D1A]">C</p>
+                  <p className="text-xs text-[#6B6B6B] mt-1">Catalyst</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-[#0D0D1A]">K</p>
+                  <p className="text-xs text-[#6B6B6B] mt-1">Key Level</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-[#0D0D1A]">S + R</p>
+                  <p className="text-xs text-[#6B6B6B] mt-1">Setup + Risk</p>
+                </div>
+              </div>
             </div>
           ) : (
             <>
-              {/* ── Stats cards ── */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                {/* Total P&L */}
-                <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-5">
-                  <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">
-                    Total P&amp;L
-                  </p>
-                  <p
-                    className={`text-xl font-bold ${
-                      totalPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'
-                    }`}
-                  >
-                    {totalPnl >= 0 ? '' : '-'}${Math.abs(totalPnl).toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                </div>
-
-                {/* Win Rate */}
-                <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-5">
-                  <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">
-                    Win Rate
-                  </p>
-                  <p
-                    className={`text-xl font-bold ${
-                      winRate >= 50 ? 'text-[#22C55E]' : 'text-[#EF4444]'
-                    }`}
-                  >
-                    {winRate.toFixed(1)}%
-                  </p>
-                </div>
-
-                {/* Total Trades */}
-                <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-5">
-                  <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">
-                    Total Trades
-                  </p>
-                  <p className="text-xl font-bold text-[#0D0D1A]">{totalTrades}</p>
-                </div>
-
-                {/* Current Streak */}
-                <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-5">
-                  <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">
-                    Streak
-                  </p>
-                  <p
-                    className={`text-xl font-bold ${
-                      currentStreak === 0
-                        ? 'text-[#0D0D1A]'
-                        : streakIsWin
-                        ? 'text-[#22C55E]'
-                        : 'text-[#EF4444]'
-                    }`}
-                  >
-                    {streakLabel}
-                  </p>
-                </div>
-              </div>
-
               {/* ── Equity Chart ── */}
               <div className="mb-6">
                 <EquityChart trades={allTrades.map((t) => ({ date: t.date, pnl: t.pnl }))} />

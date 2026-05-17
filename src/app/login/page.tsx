@@ -82,6 +82,14 @@ export default function LoginPage() {
               placeholder="••••••••"
               className="w-full px-4 py-3 rounded-xl border border-[#E2DDD6] bg-[#EDE8DF] text-[#0D0D1A] placeholder-[#9CA3AF] text-sm focus:outline-none focus:ring-2 focus:ring-[#0D0D1A] transition"
             />
+            <div className="text-right mt-1">
+              <Link
+                href="/forgot-password"
+                className="text-xs text-[#6B6B6B] hover:text-[#0D0D1A] transition-colors"
+              >
+                Forgot your password?
+              </Link>
+            </div>
           </div>
 
           {/* Error */}

@@ -51,11 +51,19 @@ export default function NavBar({ userEmail }: NavBarProps) {
             ))}
           </nav>
 
-          {/* User email */}
+          {/* User email + settings */}
           {userEmail && (
-            <span className="hidden md:block text-xs text-[#6B6B6B] max-w-[160px] truncate">
-              {userEmail}
-            </span>
+            <div className="hidden md:flex items-center gap-2">
+              <span className="text-xs text-[#6B6B6B] max-w-[160px] truncate">
+                {userEmail}
+              </span>
+              <Link
+                href="/settings"
+                className="text-xs text-[#6B6B6B] hover:text-[#0D0D1A] transition-colors"
+              >
+                Settings
+              </Link>
+            </div>
           )}
 
           {/* Logout button */}

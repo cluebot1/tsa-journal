@@ -30,6 +30,17 @@ interface Trade {
   pnl: number | null
   notes?: string | null
   created_at?: string
+  catalyst?: string | null
+  key_level?: string | null
+  strat_setup?: string | null
+  entry_price?: number | null
+  exit_price?: number | null
+  contracts?: number | null
+  emotion?: string | null
+  followed_plan?: string | null
+  what_went_right?: string | null
+  what_went_wrong?: string | null
+  lessons?: string | null
 }
 
 const setupColors: Record<string, string> = {
@@ -212,6 +223,8 @@ export default function TradesPage() {
 
   // --- Summary ---
   const totalFilteredPnl = filteredTrades.reduce((sum, t) => sum + (t.pnl ?? 0), 0)
+  const filteredWins = filteredTrades.filter(t => (t.pnl ?? 0) > 0).length
+  const filteredWinRate = filteredTrades.length > 0 ? (filteredWins / filteredTrades.length) * 100 : 0
 
   // --- Pagination ---
   const totalPages = Math.max(1, Math.ceil(filteredTrades.length / PAGE_SIZE))
@@ -326,6 +339,28 @@ export default function TradesPage() {
     }
   }
 
+  // --- Export CSV ---
+  function exportToCSV() {
+    if (filteredTrades.length === 0) { toast.error('No trades to export.'); return }
+    const headers = ['Date','Ticker','Direction','Setup Type','Catalyst','Key Level','Strat Setup','Entry','Exit','Contracts','P&L','Emotion','Followed Plan','What Went Right','What Went Wrong','Lessons','Notes']
+    const rows = filteredTrades.map(t => [
+      t.date, t.ticker, t.direction ?? '', t.setup_type ?? '',
+      t.catalyst ?? '', t.key_level ?? '', t.strat_setup ?? '',
+      t.entry_price ?? '', t.exit_price ?? '', t.contracts ?? '',
+      t.pnl ?? '', t.emotion ?? '', t.followed_plan ?? '',
+      t.what_went_right ?? '', t.what_went_wrong ?? '', t.lessons ?? '', t.notes ?? ''
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `tsa-trades-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${filteredTrades.length} trades`)
+  }
+
   // --- Select helpers ---
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
@@ -382,6 +417,13 @@ export default function TradesPage() {
               </button>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={exportToCSV}
+                className="bg-white border border-[#E2DDD6] text-[#0D0D1A] text-sm font-medium px-4 py-2.5 rounded-xl hover:opacity-80 transition-opacity flex items-center gap-2"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export CSV
+              </button>
               <button
                 onClick={() => setShowCsvModal(true)}
                 className="bg-white border border-[#E2DDD6] text-[#0D0D1A] text-sm font-medium px-4 py-2.5 rounded-xl hover:opacity-80 transition-opacity flex items-center gap-2"
@@ -441,24 +483,22 @@ export default function TradesPage() {
             />
           </div>
 
-          {/* Summary bar */}
+          {/* Stat bar */}
           {!loading && filteredTrades.length > 0 && (
-            <div className="flex items-center gap-4 mb-4 px-1">
-              <p className="text-sm text-[#0D0D1A]/60">
-                <span className="font-semibold text-[#0D0D1A]">{filteredTrades.length}</span>{' '}
-                {filteredTrades.length === 1 ? 'trade' : 'trades'}
-              </p>
-              <span className="text-[#E2DDD6]">|</span>
-              <p className="text-sm text-[#0D0D1A]/60">
-                Total P&amp;L:{' '}
-                <span
-                  className={`font-semibold ${
-                    totalFilteredPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'
-                  }`}
-                >
-                  {formatPnl(totalFilteredPnl)}
-                </span>
-              </p>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="bg-white border border-[#E2DDD6] rounded-xl px-3 py-1.5 text-xs font-medium text-[#0D0D1A]">
+                {filteredTrades.length} {filteredTrades.length === 1 ? 'Trade' : 'Trades'}
+              </span>
+              <span className="bg-white border border-[#E2DDD6] rounded-xl px-3 py-1.5 text-xs font-medium text-[#0D0D1A]">
+                Win Rate: {filteredWinRate.toFixed(1)}%
+              </span>
+              <span
+                className={`bg-white border border-[#E2DDD6] rounded-xl px-3 py-1.5 text-xs font-medium ${
+                  totalFilteredPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'
+                }`}
+              >
+                P&amp;L: {formatPnl(totalFilteredPnl)}
+              </span>
             </div>
           )}
 
