@@ -168,6 +168,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState<string | undefined>(undefined)
   const [showHelp, setShowHelp] = useState(false)
+  const [timelineRange, setTimelineRange] = useState<'7d' | '30d' | '90d' | 'all'>('all')
 
   const fetchTrades = useCallback(async () => {
     setLoading(true)
@@ -264,8 +265,16 @@ export default function AnalyticsPage() {
   const hasEmotionData = emotionStats.length > 0
 
   // ─── Timeline scatter data ────────────────────────────────────────────────
+  const timelineCutoff = timelineRange === 'all' ? 0
+    : Date.now() - (timelineRange === '7d' ? 7 : timelineRange === '30d' ? 30 : 90) * 86400000
+
   const emotionTimelineData: TimelineDot[] = trades
-    .filter((t) => t.emotion && t.pnl !== null)
+    .filter((t) => {
+      if (!t.emotion || t.pnl === null) return false
+      if (timelineRange === 'all') return true
+      const [y, m, d] = t.date.split('-').map(Number)
+      return new Date(y, m - 1, d).getTime() >= timelineCutoff
+    })
     .map((t) => {
       const [year, month, day] = t.date.split('-').map(Number)
       const mm = String(month).padStart(2, '0')
@@ -528,7 +537,24 @@ export default function AnalyticsPage() {
 
                     {/* Emotion P&L timeline scatter */}
                     <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
-                      <h3 className="text-base font-semibold text-[#0D0D1A] mb-1">P&amp;L Timeline by Emotion</h3>
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="text-base font-semibold text-[#0D0D1A]">P&amp;L Timeline by Emotion</h3>
+                        <div className="flex items-center gap-1">
+                          {(['7d','30d','90d','all'] as const).map((r) => (
+                            <button
+                              key={r}
+                              onClick={() => setTimelineRange(r)}
+                              className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                                timelineRange === r
+                                  ? 'bg-[#0D0D1A] text-white'
+                                  : 'bg-[#EDE8DF] text-[#0D0D1A]/60 hover:text-[#0D0D1A]'
+                              }`}
+                            >
+                              {r === 'all' ? 'All' : r === '7d' ? '7D' : r === '30d' ? '30D' : '90D'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <div className="flex items-center gap-3 mb-4">
                         <span className="flex items-center gap-1 text-xs text-[#0D0D1A]/50">
                           <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#22C55E]" /> Positive Mindset
