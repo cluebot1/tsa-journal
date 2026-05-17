@@ -110,6 +110,20 @@ function parseDate(raw: string): string | null {
   return null
 }
 
+function mapSetupType(raw: string): string {
+  if (!raw || !raw.trim()) return 'Other'
+  const v = raw.toLowerCase().trim()
+  if (v.includes('orb') || v.includes('opening range') || v.includes('30') || v.includes('30min') || v.includes('30-min')) return '30-Min ORB'
+  if (v.includes('gap') && (v.includes('go') || v.includes('fill') || v.includes('strategy') || v.includes('cont'))) return 'Gap Strategy'
+  if (v.includes('gap')) return 'Gap Strategy'
+  if (v.includes('4h') || v.includes('4hr') || v.includes('4-h') || v.includes('four') || (v.includes('reversal') && !v.includes('key'))) return '4H Reversal'
+  if (v.includes('key level') || v.includes('key lvl') || v.includes('s/r') || v.includes('support') || v.includes('resistance') || v.includes('reaction')) return 'Key Level Reaction'
+  if (v.includes('broadening') || v.includes('formation') || v.includes('breakout') || v.includes('bfb')) return 'Broadening Formation Breakout'
+  if (v.includes('trend') || v.includes('continuation')) return 'Trend Continuation'
+  // Return raw value (will be saved as-is, treated as custom)
+  return raw.trim()
+}
+
 function mapDirection(raw: string): string | null {
   if (!raw || !raw.trim()) return null
   const v = raw.toLowerCase().trim()
@@ -226,7 +240,7 @@ export default function TradesPage() {
         date: parseDate(row.date ?? '') ?? new Date().toISOString().split("T")[0],
         ticker: (row.ticker ?? 'UNKNOWN').toUpperCase(),
         direction: row.direction ? mapDirection(row.direction) : null,
-        setup_type: row.setup_type ?? 'Other',
+        setup_type: row.setup_type ? mapSetupType(row.setup_type) : 'Other',
         entry_price: row.entry_price ? parseFloat(row.entry_price.replace(/[$,]/g,'')) : null,
         exit_price: row.exit_price ? parseFloat(row.exit_price.replace(/[$,]/g,'')) : null,
         pnl: row.pnl ? parseFloat(row.pnl.replace(/[$,]/g,'')) : null,
