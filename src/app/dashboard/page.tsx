@@ -47,7 +47,14 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .order('date', { ascending: true })
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('starting_balance, full_name')
+    .eq('id', user.id)
+    .single()
+
   const allTrades: Trade[] = trades ?? []
+  const startingBalance: number | null = profile?.starting_balance ?? null
 
   // --- Compute stats ---
   const totalPnl = allTrades.reduce((sum, t) => sum + (t.pnl ?? 0), 0)
@@ -130,24 +137,36 @@ export default async function DashboardPage() {
 
           {/* ── Stats cards ── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {/* Total P&L */}
+            {/* Account Value / Total P&L */}
             <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-5">
-              <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">
-                Total P&amp;L
-              </p>
-              {isEmpty ? (
-                <p className="text-xl font-bold text-[#0D0D1A]/30">—</p>
+              {startingBalance != null ? (
+                <>
+                  <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">Account Value</p>
+                  {isEmpty ? (
+                    <p className="text-xl font-bold text-[#0D0D1A]/30">—</p>
+                  ) : (
+                    <>
+                      <p className={`text-xl font-bold ${totalPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                        ${(startingBalance + totalPnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className={`text-xs mt-1 font-medium ${totalPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                        {totalPnl >= 0 ? '+' : ''}{((totalPnl / startingBalance) * 100).toFixed(1)}% ({totalPnl >= 0 ? '+' : '-'}${Math.abs(totalPnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                      </p>
+                    </>
+                  )}
+                </>
               ) : (
-                <p
-                  className={`text-xl font-bold ${
-                    totalPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'
-                  }`}
-                >
-                  {totalPnl >= 0 ? '' : '-'}${Math.abs(totalPnl).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </p>
+                <>
+                  <p className="text-xs font-medium text-[#0D0D1A]/50 uppercase tracking-wide mb-2">Total P&amp;L</p>
+                  {isEmpty ? (
+                    <p className="text-xl font-bold text-[#0D0D1A]/30">—</p>
+                  ) : (
+                    <p className={`text-xl font-bold ${totalPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                      {totalPnl >= 0 ? '' : '-'}${Math.abs(totalPnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  )}
+                  <p className="text-xs text-[#9CA3AF] mt-1">Set starting balance in Settings</p>
+                </>
               )}
             </div>
 

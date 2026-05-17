@@ -10,11 +10,15 @@ import MobileNav from '@/components/MobileNav'
 interface Props {
   userEmail: string
   initialFullName: string
+  initialStartingBalance?: number | null
 }
 
-export default function SettingsClient({ userEmail, initialFullName }: Props) {
+export default function SettingsClient({ userEmail, initialFullName, initialStartingBalance }: Props) {
   const router = useRouter()
   const [fullName, setFullName] = useState(initialFullName)
+  const [startingBalance, setStartingBalance] = useState(
+    initialStartingBalance != null ? String(initialStartingBalance) : ''
+  )
   const [savingProfile, setSavingProfile] = useState(false)
 
   const [newPassword, setNewPassword] = useState('')
@@ -31,7 +35,10 @@ export default function SettingsClient({ userEmail, initialFullName }: Props) {
 
       const { error } = await supabase
         .from('profiles')
-        .update({ full_name: fullName })
+        .update({
+          full_name: fullName,
+          starting_balance: startingBalance ? parseFloat(startingBalance) : null
+        })
         .eq('id', user.id)
 
       if (error) {
@@ -110,6 +117,25 @@ export default function SettingsClient({ userEmail, initialFullName }: Props) {
                   placeholder="Your name"
                   className="w-full px-4 py-3 rounded-xl border border-[#E2DDD6] bg-[#EDE8DF] text-[#0D0D1A] placeholder-[#9CA3AF] text-sm focus:outline-none focus:ring-2 focus:ring-[#0D0D1A] transition"
                 />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="startingBalance" className="text-sm font-medium text-[#0D0D1A]">
+                  Starting Account Balance
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#0D0D1A]/50 text-sm">$</span>
+                  <input
+                    id="startingBalance"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={startingBalance}
+                    onChange={(e) => setStartingBalance(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-8 pr-4 py-3 rounded-xl border border-[#E2DDD6] bg-[#EDE8DF] text-[#0D0D1A] placeholder-[#9CA3AF] text-sm focus:outline-none focus:ring-2 focus:ring-[#0D0D1A] transition"
+                  />
+                </div>
+                <p className="text-xs text-[#9CA3AF] mt-0.5">The balance you started with. Used to calculate your true account value and % gain.</p>
               </div>
               <div>
                 <button
