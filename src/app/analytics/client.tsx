@@ -537,7 +537,7 @@ export default function AnalyticsPage() {
                         </span>
                       </div>
                       <ResponsiveContainer width="100%" height={250}>
-                        <ScatterChart margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                        <ScatterChart margin={{ top: 4, right: 8, left: 0, bottom: 24 }}>
                           <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" />
                           <XAxis
                             dataKey="x"
@@ -547,9 +547,11 @@ export default function AnalyticsPage() {
                             tickFormatter={(v: number) =>
                               new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                             }
-                            tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6 }}
+                            tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6, angle: -35, textAnchor: 'end', dy: 4 }}
                             axisLine={false}
                             tickLine={false}
+                            interval="preserveStartEnd"
+                            height={48}
                           />
                           <YAxis
                             dataKey="y"

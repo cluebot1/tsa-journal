@@ -112,16 +112,20 @@ function parseDate(raw: string): string | null {
 
 function mapSetupType(raw: string): string {
   if (!raw || !raw.trim()) return 'Other'
-  const v = raw.toLowerCase().trim()
-  if (v.includes('orb') || v.includes('opening range') || v.includes('30') || v.includes('30min') || v.includes('30-min')) return '30-Min ORB'
-  if (v.includes('gap') && (v.includes('go') || v.includes('fill') || v.includes('strategy') || v.includes('cont'))) return 'Gap Strategy'
-  if (v.includes('gap')) return 'Gap Strategy'
-  if (v.includes('4h') || v.includes('4hr') || v.includes('4-h') || v.includes('four') || (v.includes('reversal') && !v.includes('key'))) return '4H Reversal'
-  if (v.includes('key level') || v.includes('key lvl') || v.includes('s/r') || v.includes('support') || v.includes('resistance') || v.includes('reaction')) return 'Key Level Reaction'
-  if (v.includes('broadening') || v.includes('formation') || v.includes('breakout') || v.includes('bfb')) return 'Broadening Formation Breakout'
-  if (v.includes('trend') || v.includes('continuation')) return 'Trend Continuation'
-  // Return raw value (will be saved as-is, treated as custom)
-  return raw.trim()
+  const trimmed = raw.trim()
+  const v = trimmed.toLowerCase()
+  // Exact-ish matches for Tez's real setup names — preserve them as-is
+  if (v.includes('key level break') || v.includes('break + retest') || v.includes('break retest')) return trimmed
+  if (v.includes('trend continuation') || v.includes('strat 2-2') || v.includes('strat 2 2')) return trimmed
+  if (v.includes('earnings straddle') || v.includes('earning straddle')) return trimmed
+  // Abbreviation shortcuts for the 5 standard setups
+  if (v === 'orb' || v === '30min orb' || v === '30-min orb' || v.includes('opening range')) return '30-Min ORB'
+  if (v === 'gap' || v === 'gap & go' || v === 'gap and go' || v === 'gap fill' || v === 'gap strategy') return 'Gap Strategy'
+  if (v === '4h reversal' || v === '4hr reversal' || v === '4-h reversal') return '4H Reversal'
+  if (v === 'key level reaction' || v === 'key level' || v === 'klr') return 'Key Level Reaction'
+  if (v === 'broadening formation' || v === 'bfb' || v === 'broadening formation breakout') return 'Broadening Formation Breakout'
+  // Default: keep exactly as written in the CSV
+  return trimmed
 }
 
 function mapDirection(raw: string): string | null {

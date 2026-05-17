@@ -18,8 +18,8 @@ const DEFAULT_SETUP_TYPES = [
 ]
 
 const EMOTIONS = [
-  'Calm', 'Confident', 'Focused', 'Anxious', 'FOMO',
-  'Frustrated', 'Overconfident', 'Greedy', 'Patient', 'Neutral',
+  'Calm', 'Confident', 'Focused', 'Anxious', 'Fearful', 'FOMO',
+  'Frustrated', 'Revenge', 'Overconfident', 'Greedy', 'Patient', 'Neutral',
 ]
 
 const inputClass =
