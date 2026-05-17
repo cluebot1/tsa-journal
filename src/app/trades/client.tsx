@@ -141,6 +141,8 @@ export default function TradesPage() {
   const [filterTicker, setFilterTicker] = useState<string>('')
   const [currentPage, setCurrentPage] = useState(1)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
   const [showCsvModal, setShowCsvModal] = useState(false)
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[]>([])
@@ -280,6 +282,42 @@ export default function TradesPage() {
     }
   }
 
+  // --- Select helpers ---
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === paginated.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(paginated.map(t => t.id)))
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Delete ${selectedIds.size} trade${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return
+    setBulkDeleting(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from('trades').delete().in('id', Array.from(selectedIds))
+      if (error) {
+        toast.error('Failed to delete trades.')
+      } else {
+        toast.success(`${selectedIds.size} trade${selectedIds.size > 1 ? 's' : ''} deleted.`)
+        setSelectedIds(new Set())
+        await fetchTrades()
+      }
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#EDE8DF]">
       <NavBar userEmail={userEmail} />
@@ -319,6 +357,23 @@ export default function TradesPage() {
               </Link>
             </div>
           </div>
+
+          {/* Bulk actions bar */}
+          {selectedIds.size > 0 && (
+            <div className="flex items-center justify-between bg-red-50 border border-red-100 rounded-xl px-4 py-2.5 mb-4">
+              <span className="text-sm font-medium text-red-700">{selectedIds.size} trade{selectedIds.size > 1 ? 's' : ''} selected</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setSelectedIds(new Set())} className="text-sm text-[#6B6B6B] hover:text-[#0D0D1A] transition-colors">Clear</button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  className="bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size}`}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Filter bar */}
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -425,6 +480,14 @@ export default function TradesPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[#E2DDD6] bg-[#EDE8DF]/40">
+                      <th className="px-4 py-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={paginated.length > 0 && selectedIds.size === paginated.length}
+                          onChange={toggleSelectAll}
+                          className="w-4 h-4 rounded accent-[#0D0D1A] cursor-pointer"
+                        />
+                      </th>
                       <th className="text-left px-6 py-3 text-xs font-semibold text-[#0D0D1A]/50 uppercase tracking-wide">
                         Date
                       </th>
@@ -453,8 +516,16 @@ export default function TradesPage() {
                       return (
                         <tr
                           key={trade.id}
-                          className="border-b border-[#E2DDD6] last:border-0 hover:bg-[#EDE8DF]/30 transition-colors"
+                          className={`border-b border-[#E2DDD6] last:border-0 hover:bg-[#EDE8DF]/30 transition-colors ${selectedIds.has(trade.id) ? 'bg-[#EDE8DF]/50' : ''}`}
                         >
+                          <td className="px-4 py-4 w-10">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(trade.id)}
+                              onChange={() => toggleSelect(trade.id)}
+                              className="w-4 h-4 rounded accent-[#0D0D1A] cursor-pointer"
+                            />
+                          </td>
                           <td className="px-6 py-4 text-[#0D0D1A]/60 whitespace-nowrap">
                             {formatDateDisplay(trade.date)}
                           </td>
@@ -525,20 +596,22 @@ export default function TradesPage() {
                   return (
                     <div
                       key={trade.id}
-                      className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-4"
+                      className={`bg-white rounded-2xl shadow-sm border p-4 ${selectedIds.has(trade.id) ? 'border-[#0D0D1A]' : 'border-[#E2DDD6]'}`}
                     >
                       <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <p className="font-bold text-[#0D0D1A] text-base">{trade.ticker}</p>
-                          <p className="text-xs text-[#0D0D1A]/50 mt-0.5">
-                            {formatDateDisplay(trade.date)}
-                          </p>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(trade.id)}
+                            onChange={() => toggleSelect(trade.id)}
+                            className="w-4 h-4 rounded accent-[#0D0D1A] cursor-pointer mt-0.5"
+                          />
+                          <div>
+                            <p className="font-bold text-[#0D0D1A] text-base">{trade.ticker}</p>
+                            <p className="text-xs text-[#0D0D1A]/50 mt-0.5">{formatDateDisplay(trade.date)}</p>
+                          </div>
                         </div>
-                        <p
-                          className={`text-base font-bold ${
-                            isWin ? 'text-[#22C55E]' : isLoss ? 'text-[#EF4444]' : 'text-[#0D0D1A]'
-                          }`}
-                        >
+                        <p className={`text-base font-bold ${isWin ? 'text-[#22C55E]' : isLoss ? 'text-[#EF4444]' : 'text-[#0D0D1A]'}`}>
                           {formatPnl(trade.pnl)}
                         </p>
                       </div>
