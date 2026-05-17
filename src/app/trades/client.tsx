@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import NavBar from '@/components/NavBar'
 import MobileNav from '@/components/MobileNav'
 import { Skeleton } from '@/components/ui/skeleton'
+import HelpModal from '@/components/HelpModal'
 
 const SETUPS = [
   '30-Min ORB',
@@ -109,12 +110,13 @@ function parseDate(raw: string): string | null {
   return null
 }
 
-function mapDirection(raw: string): string {
+function mapDirection(raw: string): string | null {
+  if (!raw || !raw.trim()) return null
   const v = raw.toLowerCase().trim()
-  if (['buy','long','call'].includes(v)) return 'long'
-  if (['sell','short','put'].includes(v)) return 'short'
-  if (['straddle'].includes(v)) return 'straddle'
-  return raw.toLowerCase()
+  if (['buy','long','call','b','l'].includes(v)) return 'long'
+  if (['sell','short','put','s'].includes(v)) return 'short'
+  if (['straddle','strangle','both'].includes(v)) return 'straddle'
+  return null // unrecognized = null, won't violate constraint
 }
 
 export default function TradesPage() {
@@ -125,6 +127,7 @@ export default function TradesPage() {
   const [filterTicker, setFilterTicker] = useState<string>('')
   const [currentPage, setCurrentPage] = useState(1)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [showHelp, setShowHelp] = useState(false)
   const [showCsvModal, setShowCsvModal] = useState(false)
   const [csvPreview, setCsvPreview] = useState<Record<string, string>[]>([])
   const [csvParsed, setCsvParsed] = useState<Record<string, string>[]>([])
@@ -272,7 +275,16 @@ export default function TradesPage() {
 
           {/* Page header */}
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-[#0D0D1A]">Trade Log</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-[#0D0D1A]">Trade Log</h1>
+              <button
+                onClick={() => setShowHelp(true)}
+                className="w-8 h-8 rounded-full border border-[#0D0D1A] text-[#0D0D1A] text-sm font-bold hover:bg-[#0D0D1A] hover:text-white transition-colors flex items-center justify-center"
+                aria-label="Help"
+              >
+                ?
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowCsvModal(true)}
@@ -584,6 +596,19 @@ export default function TradesPage() {
       </main>
 
       <MobileNav />
+
+      <HelpModal
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+        title="Using Your Trade Log"
+        sections={[
+          { label: 'Filter by Setup', desc: 'See which of your 5 setups performs best over time.' },
+          { label: 'Search by Ticker', desc: 'Review all your trades on a specific stock or index.' },
+          { label: 'Click a Trade', desc: 'View the full CKSR breakdown and journal notes for any trade.' },
+          { label: 'Import CSV', desc: 'Upload your existing spreadsheet and trades auto-populate.' },
+        ]}
+        tip="After 20+ trades you will start seeing clear patterns — which setup wins most, which emotion costs you."
+      />
 
       {/* CSV Import Modal */}
       {showCsvModal && (

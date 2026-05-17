@@ -17,6 +17,7 @@ import { createClient } from '@/lib/supabase/client'
 import NavBar from '@/components/NavBar'
 import MobileNav from '@/components/MobileNav'
 import { Skeleton } from '@/components/ui/skeleton'
+import HelpModal from '@/components/HelpModal'
 
 const SETUPS = [
   '30-Min ORB',
@@ -163,6 +164,7 @@ export default function AnalyticsPage() {
   const [trades, setTrades] = useState<Trade[]>([])
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState<string | undefined>(undefined)
+  const [showHelp, setShowHelp] = useState(false)
 
   const fetchTrades = useCallback(async () => {
     setLoading(true)
@@ -294,7 +296,16 @@ export default function AnalyticsPage() {
         <div className="max-w-6xl mx-auto py-8">
           {/* Page header */}
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-[#0D0D1A]">Analytics</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-[#0D0D1A]">Analytics</h1>
+              <button
+                onClick={() => setShowHelp(true)}
+                className="w-8 h-8 rounded-full border border-[#0D0D1A] text-[#0D0D1A] text-sm font-bold hover:bg-[#0D0D1A] hover:text-white transition-colors flex items-center justify-center"
+                aria-label="Help"
+              >
+                ?
+              </button>
+            </div>
             <p className="text-sm text-[#0D0D1A]/50 mt-0.5">
               Performance insights across your trade history.
             </p>
@@ -565,6 +576,20 @@ export default function AnalyticsPage() {
         </div>
       </main>
       <MobileNav />
+
+      <HelpModal
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+        title="Reading Your Analytics"
+        sections={[
+          { label: 'Win Rate by Setup', desc: 'Your best setups ranked. Double down on what works.' },
+          { label: 'P&L by Setup', desc: 'Different from win rate — a setup can win 80% but lose money if losers are too big.' },
+          { label: 'Best Day of Week', desc: 'Some traders perform better on specific days. This reveals it.' },
+          { label: 'Monthly P&L', desc: 'Trend over time. Are you improving month over month?' },
+          { label: 'Emotion and Performance', desc: 'The most powerful chart. If Anxious trades consistently lose, that IS your edge — stop taking them.' },
+        ]}
+        tip="Sort by emotion first. Most traders find 1 or 2 emotional states that cause 80% of their losses."
+      />
     </div>
   )
 }

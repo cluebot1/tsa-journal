@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import NavBar from '@/components/NavBar'
 import MobileNav from '@/components/MobileNav'
+import HelpModal from '@/components/HelpModal'
 import {
   Dialog,
   DialogContent,
@@ -57,6 +58,7 @@ export default function JournalPage() {
   const [entries, setEntries] = useState<JournalEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [showDialog, setShowDialog] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -175,7 +177,16 @@ export default function JournalPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-[#0D0D1A]">Trading Journal</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-[#0D0D1A]">Trading Journal</h1>
+              <button
+                onClick={() => setShowHelp(true)}
+                className="w-8 h-8 rounded-full border border-[#0D0D1A] text-[#0D0D1A] text-sm font-bold hover:bg-[#0D0D1A] hover:text-white transition-colors flex items-center justify-center"
+                aria-label="Help"
+              >
+                ?
+              </button>
+            </div>
             <p className="text-sm text-[#0D0D1A]/50 mt-0.5">
               {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
             </p>
@@ -261,6 +272,19 @@ export default function JournalPage() {
         )}
       </main>
       <MobileNav />
+
+      <HelpModal
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+        title="Your Trade Journal"
+        sections={[
+          { label: 'Standalone Entries', desc: 'Write session recaps, mindset notes, or lessons not tied to a specific trade.' },
+          { label: 'Mood Tracking', desc: 'Log how you felt going into the session overall, not just per trade.' },
+          { label: 'Date Timeline', desc: 'Review your mental progression week over week and spot emotional patterns.' },
+        ]}
+        tip="Write a brief entry after every session — good or bad. Note market conditions and how you felt."
+      />
+
       {/* New / Edit Dialog */}
       <Dialog open={showDialog} onOpenChange={(open) => { if (!open) closeDialog() }}>
         <DialogContent className="max-w-lg w-full">

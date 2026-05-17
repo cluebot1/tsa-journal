@@ -6,6 +6,7 @@ import Link from 'next/link'
 import NavBar from '@/components/NavBar'
 import MobileNav from '@/components/MobileNav'
 import EquityChart from '@/components/EquityChart'
+import DashboardHelp from '@/components/DashboardHelp'
 
 interface Trade {
   id: string
@@ -107,7 +108,10 @@ export default async function DashboardPage() {
           {/* Page header */}
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-2xl font-bold text-[#0D0D1A]">Dashboard</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-[#0D0D1A]">Dashboard</h1>
+                <DashboardHelp />
+              </div>
               <p className="text-sm text-[#0D0D1A]/50 mt-0.5">
                 Welcome back{user.email ? `, ${user.email.split('@')[0]}` : ''}.
               </p>

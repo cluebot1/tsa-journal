@@ -46,6 +46,12 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
   const [newSetupName, setNewSetupName] = useState('')
   const [savingSetup, setSavingSetup] = useState(false)
 
+  // Custom emotions
+  const [customEmotions, setCustomEmotions] = useState<string[]>([])
+  const [showAddEmotion, setShowAddEmotion] = useState(false)
+  const [newEmotionName, setNewEmotionName] = useState('')
+  const [savingEmotion, setSavingEmotion] = useState(false)
+
   // Form state
   const [date, setDate] = useState(today())
   const [ticker, setTicker] = useState('')
@@ -88,6 +94,14 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
         .eq('user_id', user.id)
         .order('created_at', { ascending: true })
       setCustomSetupTypes(customTypes?.map((r: { name: string }) => r.name) ?? [])
+
+      // Load custom emotions
+      const { data: emotionData } = await supabase
+        .from('custom_emotions')
+        .select('name')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+      setCustomEmotions(emotionData?.map((r: { name: string }) => r.name) ?? [])
 
       const { data: trade, error } = await supabase
         .from('trades')
@@ -140,6 +154,35 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
   }, [])
 
   const allSetupTypes = [...DEFAULT_SETUP_TYPES, ...customSetupTypes]
+
+  async function handleAddEmotion() {
+    const name = newEmotionName.trim()
+    if (!name || !userId) return
+    setSavingEmotion(true)
+    try {
+      const { error } = await supabase
+        .from('custom_emotions')
+        .insert({ user_id: userId, name })
+      if (error) throw error
+      setCustomEmotions((prev) => [...prev, name])
+      setEmotion(name)
+      setNewEmotionName('')
+      setShowAddEmotion(false)
+      toast.success('Emotion added!')
+    } catch {
+      toast.error('Failed to save emotion.')
+    } finally {
+      setSavingEmotion(false)
+    }
+  }
+
+  function handleEmotionChange(value: string) {
+    if (value === '__add_emotion__') {
+      setShowAddEmotion(true)
+    } else {
+      setEmotion(value)
+    }
+  }
 
   async function handleAddSetupType() {
     const name = newSetupName.trim()
@@ -265,6 +308,42 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
   return (
     <div className="min-h-screen bg-[#EDE8DF]">
       <NavBar userEmail={userEmail} />
+
+      {/* Add Emotion Modal */}
+      {showAddEmotion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+            <h3 className="text-base font-bold text-[#0D0D1A] mb-1">Add Emotion</h3>
+            <p className="text-xs text-[#0D0D1A]/50 mb-4">Create a custom emotion for your trading</p>
+            <input
+              type="text"
+              value={newEmotionName}
+              onChange={(e) => setNewEmotionName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddEmotion()}
+              placeholder="e.g. Revenge Trading"
+              className={inputClass}
+              autoFocus
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={handleAddEmotion}
+                disabled={savingEmotion || !newEmotionName.trim()}
+                className="flex-1 bg-[#0D0D1A] text-white rounded-xl py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+              >
+                {savingEmotion ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowAddEmotion(false); setNewEmotionName('') }}
+                className="px-4 py-2.5 rounded-xl border border-[#E2DDD6] text-[#0D0D1A]/70 text-sm font-medium hover:bg-[#EDE8DF]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Setup Type Modal */}
       {showAddSetup && (
@@ -579,13 +658,17 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
               <label className={labelClass}>Emotion</label>
               <select
                 value={emotion}
-                onChange={(e) => setEmotion(e.target.value)}
+                onChange={(e) => handleEmotionChange(e.target.value)}
                 className={inputClass}
               >
                 <option value="">Select emotion...</option>
                 {EMOTIONS.map((em) => (
                   <option key={em} value={em}>{em}</option>
                 ))}
+                {customEmotions.map((em) => (
+                  <option key={em} value={em}>{em}</option>
+                ))}
+                <option value="__add_emotion__">+ Add new emotion</option>
               </select>
             </div>
 
