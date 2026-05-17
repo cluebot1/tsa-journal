@@ -35,12 +35,12 @@ const SETUP_SHORT: Record<string, string> = {
   'Broadening Formation Breakout': 'BFB',
 }
 
-const EMOTIONS = ['Calm', 'Confident', 'Focused', 'Anxious', 'FOMO', 'Frustrated', 'Overconfident', 'Greedy', 'Patient', 'Neutral']
+const EMOTIONS = ['Calm', 'Confident', 'Focused', 'Anxious', 'Fearful', 'FOMO', 'Frustrated', 'Revenge', 'Overconfident', 'Greedy', 'Patient', 'Neutral']
 
 const EMOTION_CATEGORY: Record<string, 'positive' | 'neutral' | 'negative'> = {
   Calm: 'positive', Confident: 'positive', Focused: 'positive', Patient: 'positive',
-  Neutral: 'neutral',
-  Anxious: 'negative', FOMO: 'negative', Frustrated: 'negative', Overconfident: 'negative', Greedy: 'negative',
+  Neutral: 'neutral', FOMO: 'neutral',
+  Anxious: 'negative', Fearful: 'negative', Frustrated: 'negative', Revenge: 'negative', Overconfident: 'negative', Greedy: 'negative',
 }
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
@@ -85,7 +85,10 @@ interface TimelineDot {
   x: number
   y: number
   date: string
+  dateLabel: string
   emotion: string
+  ticker: string
+  color: string
 }
 
 function formatDollar(v: number): string {
@@ -149,7 +152,7 @@ function ScatterTooltip({ active, payload }: ScatterTooltipProps) {
     const d = payload[0].payload
     return (
       <div className="bg-[#0D0D1A] text-white rounded-xl px-4 py-3 shadow-lg text-sm">
-        <p className="text-white/60 mb-1">{d.date}</p>
+        <p className="text-white/60 mb-1">{d.ticker} · {d.dateLabel}</p>
         <p className={`font-semibold ${d.y >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
           {d.y >= 0 ? '+' : ''}${Math.abs(d.y).toFixed(2)}
         </p>
@@ -260,31 +263,34 @@ export default function AnalyticsPage() {
   const hasEmotionData = emotionStats.length > 0
 
   // ─── Timeline scatter data ────────────────────────────────────────────────
-  const timelineDots: TimelineDot[] = trades
-    .filter((t) => t.pnl !== null)
+  const emotionTimelineData: TimelineDot[] = trades
+    .filter((t) => t.emotion && t.pnl !== null)
     .map((t) => {
       const [year, month, day] = t.date.split('-').map(Number)
+      const mm = String(month).padStart(2, '0')
+      const dd = String(day).padStart(2, '0')
+      const emotion = t.emotion as string
       return {
         x: new Date(year, month - 1, day).getTime(),
-        y: t.pnl ?? 0,
+        y: t.pnl as number,
         date: t.date,
-        emotion: t.emotion ?? '',
+        dateLabel: `${mm}/${dd}`,
+        emotion,
+        ticker: t.ticker,
+        color: (['Calm','Confident','Focused','Patient'] as string[]).includes(emotion) ? '#22C55E'
+             : (['Anxious','Fearful','Frustrated','Revenge','Overconfident','Greedy'] as string[]).includes(emotion) ? '#EF4444'
+             : '#F59E0B',
       }
     })
+    .sort((a, b) => a.x - b.x)
 
-  const greenDots = timelineDots.filter((d) => EMOTION_CATEGORY[d.emotion] === 'positive' || (!d.emotion && d.y > 0))
-  const yellowDots = timelineDots.filter((d) => d.emotion === 'Neutral' || (!d.emotion && d.y === 0))
-  const redDots = timelineDots.filter((d) => EMOTION_CATEGORY[d.emotion] === 'negative')
-  const untaggedDots = timelineDots.filter((d) => !d.emotion && d.y !== 0 && EMOTION_CATEGORY[d.emotion] === undefined)
+  const greenEmotionDots = emotionTimelineData.filter((d) => d.color === '#22C55E')
+  const yellowEmotionDots = emotionTimelineData.filter((d) => d.color === '#F59E0B')
+  const redEmotionDots = emotionTimelineData.filter((d) => d.color === '#EF4444')
+  const hasTimelineData = emotionTimelineData.length > 0
 
-  // Separate by actual emotion category only when emotion is set
-  const positiveDots = timelineDots.filter((d) => d.emotion && EMOTION_CATEGORY[d.emotion] === 'positive')
-  const neutralDots = timelineDots.filter((d) => d.emotion === 'Neutral')
-  const negativeDots = timelineDots.filter((d) => d.emotion && EMOTION_CATEGORY[d.emotion] === 'negative')
-  const noEmotionDots = timelineDots.filter((d) => !d.emotion)
-
-  const xDomain = timelineDots.length > 0
-    ? [Math.min(...timelineDots.map((d) => d.x)), Math.max(...timelineDots.map((d) => d.x))]
+  const emotionXDomain: [number, number] | ['auto', 'auto'] = emotionTimelineData.length > 0
+    ? [Math.min(...emotionTimelineData.map((d) => d.x)), Math.max(...emotionTimelineData.map((d) => d.x))]
     : ['auto', 'auto']
 
   const isEmpty = trades.length === 0
@@ -524,51 +530,54 @@ export default function AnalyticsPage() {
                       <h3 className="text-base font-semibold text-[#0D0D1A] mb-1">P&amp;L Timeline by Emotion</h3>
                       <div className="flex items-center gap-3 mb-4">
                         <span className="flex items-center gap-1 text-xs text-[#0D0D1A]/50">
-                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#22C55E]" /> Positive
+                          <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#22C55E]" /> Positive Mindset
                         </span>
                         <span className="flex items-center gap-1 text-xs text-[#0D0D1A]/50">
-                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#F59E0B]" /> Neutral
+                          <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#F59E0B]" /> Neutral
                         </span>
                         <span className="flex items-center gap-1 text-xs text-[#0D0D1A]/50">
-                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#EF4444]" /> Negative
-                        </span>
-                        <span className="flex items-center gap-1 text-xs text-[#0D0D1A]/50">
-                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#CBD5E1]" /> Untagged
+                          <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#EF4444]" /> Negative Mindset
                         </span>
                       </div>
-                      <ResponsiveContainer width="100%" height={250}>
-                        <ScatterChart margin={{ top: 4, right: 8, left: 0, bottom: 24 }}>
-                          <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" />
-                          <XAxis
-                            dataKey="x"
-                            type="number"
-                            domain={xDomain as [number, number]}
-                            scale="time"
-                            tickFormatter={(v: number) =>
-                              new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                            }
-                            tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6, angle: -35, textAnchor: 'end', dy: 4 }}
-                            axisLine={false}
-                            tickLine={false}
-                            interval="preserveStartEnd"
-                            height={48}
-                          />
-                          <YAxis
-                            dataKey="y"
-                            tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6 }}
-                            axisLine={false}
-                            tickLine={false}
-                            tickFormatter={formatDollar}
-                            width={48}
-                          />
-                          <ZAxis range={[40, 40]} />
-                          <Tooltip content={<ScatterTooltip />} />
-                          <Scatter data={positiveDots} fill="#22C55E" fillOpacity={0.85} />
-                          <Scatter data={neutralDots} fill="#F59E0B" fillOpacity={0.85} />
-                          <Scatter data={negativeDots} fill="#EF4444" fillOpacity={0.85} />
-                          <Scatter data={noEmotionDots} fill="#CBD5E1" fillOpacity={0.6} />
-                        </ScatterChart>
-                      </ResponsiveContainer>
+                      {!hasTimelineData ? (
+                        <div className="flex items-center justify-center h-[250px]">
+                          <p className="text-sm text-[#0D0D1A]/40">Log trades with emotions to see your pattern</p>
+                        </div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height={250}>
+                          <ScatterChart margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                            <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" />
+                            <XAxis
+                              dataKey="x"
+                              type="number"
+                              domain={emotionXDomain as [number, number]}
+                              scale="time"
+                              tickFormatter={(v: number) => {
+                                const d = new Date(v)
+                                const mm = String(d.getMonth() + 1).padStart(2, '0')
+                                const dd = String(d.getDate()).padStart(2, '0')
+                                return `${mm}/${dd}`
+                              }}
+                              tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6 }}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <YAxis
+                              dataKey="y"
+                              tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6 }}
+                              axisLine={false}
+                              tickLine={false}
+                              tickFormatter={formatDollar}
+                              width={48}
+                            />
+                            <ZAxis range={[40, 40]} />
+                            <Tooltip content={<ScatterTooltip />} />
+                            <Scatter data={greenEmotionDots} fill="#22C55E" fillOpacity={0.85} />
+                            <Scatter data={yellowEmotionDots} fill="#F59E0B" fillOpacity={0.85} />
+                            <Scatter data={redEmotionDots} fill="#EF4444" fillOpacity={0.85} />
+                          </ScatterChart>
+                        </ResponsiveContainer>
+                      )}
                     </div>
                   </div>
                 )}

@@ -89,9 +89,13 @@ function mapHeader(h: string): string | null {
   if (['pnl','pandl','profit','net','netpnl'].includes(n)) return 'pnl'
   if (['contracts','qty','quantity'].includes(n)) return 'contracts'
   if (['risk','riskamount'].includes(n)) return 'risk_amount'
-  if (['notes','comments','journal'].includes(n)) return 'notes'
   if (['emotion'].includes(n)) return 'emotion'
-  if (['catalyst'].includes(n)) return 'catalyst'
+  if (['catalyst','whyitradedit','whytraded','why','reason'].includes(n)) return 'catalyst'
+  if (['tradetype','expiry'].includes(n)) return 'trade_type'
+  if (['outcome','result'].includes(n)) return null
+  if (['notes','comments','journal','reflection','reflectionnotes'].includes(n)) return 'notes'
+  if (['followedplan','plan'].includes(n)) return 'followed_plan'
+  if (['cumulativepnl','runningpnl'].includes(n)) return null
   return null
 }
 
@@ -112,20 +116,26 @@ function parseDate(raw: string): string | null {
 
 function mapSetupType(raw: string): string {
   if (!raw || !raw.trim()) return 'Other'
-  const trimmed = raw.trim()
-  const v = trimmed.toLowerCase()
-  // Exact-ish matches for Tez's real setup names — preserve them as-is
-  if (v.includes('key level break') || v.includes('break + retest') || v.includes('break retest')) return trimmed
-  if (v.includes('trend continuation') || v.includes('strat 2-2') || v.includes('strat 2 2')) return trimmed
-  if (v.includes('earnings straddle') || v.includes('earning straddle')) return trimmed
-  // Abbreviation shortcuts for the 5 standard setups
-  if (v === 'orb' || v === '30min orb' || v === '30-min orb' || v.includes('opening range')) return '30-Min ORB'
-  if (v === 'gap' || v === 'gap & go' || v === 'gap and go' || v === 'gap fill' || v === 'gap strategy') return 'Gap Strategy'
-  if (v === '4h reversal' || v === '4hr reversal' || v === '4-h reversal') return '4H Reversal'
-  if (v === 'key level reaction' || v === 'key level' || v === 'klr') return 'Key Level Reaction'
-  if (v === 'broadening formation' || v === 'bfb' || v === 'broadening formation breakout') return 'Broadening Formation Breakout'
-  // Default: keep exactly as written in the CSV
-  return trimmed
+  const v = raw.toLowerCase().trim()
+  if (v.includes('orb') || v.includes('opening range') || v.includes('30') || v.includes('30min') || v.includes('30-min')) return '30-Min ORB'
+  if (v.includes('gap') && (v.includes('go') || v.includes('fill') || v.includes('strategy') || v.includes('cont'))) return 'Gap Strategy'
+  if (v.includes('gap')) return 'Gap Strategy'
+  if (v.includes('4h') || v.includes('4hr') || v.includes('4-h') || v.includes('four') || (v.includes('reversal') && !v.includes('key'))) return '4H Reversal'
+  // Key Level Break + Retest must be checked before Key Level Reaction
+  if ((v.includes('break') && v.includes('retest')) || (v.includes('key') && v.includes('break')) || (v.includes('kl') && v.includes('break'))) return 'Key Level Break + Retest'
+  if (v.includes('key level') || v.includes('key lvl') || v.includes('s/r') || v.includes('support') || v.includes('resistance') || v.includes('reaction')) return 'Key Level Reaction'
+  if (v.includes('broadening') || v.includes('formation') || v.includes('breakout') || v.includes('bfb')) return 'Broadening Formation Breakout'
+  if (v.includes('trend') || v.includes('continuation') || v.includes('2-2')) return 'Trend Continuation'
+  if (v.includes('earnings') && v.includes('straddle')) return 'Earnings Straddle'
+  return raw.trim()
+}
+
+function mapFollowedPlan(raw: string): string | null {
+  const v = raw.toLowerCase().trim()
+  if (['yes','y','true','1','yep','yeah'].includes(v)) return 'yes'
+  if (['no','n','false','0','nope','nah'].includes(v)) return 'no'
+  if (['partially','partial','kinda','somewhat','sort of','mostly'].includes(v)) return 'partially'
+  return null
 }
 
 function mapDirection(raw: string): string | null {
@@ -241,24 +251,54 @@ export default function TradesPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const inserts = csvParsed.map(row => ({
-        user_id: user.id,
-        date: parseDate(row.date ?? '') ?? new Date().toISOString().split("T")[0],
-        ticker: (row.ticker ?? 'UNKNOWN').toUpperCase(),
-        direction: row.direction ? mapDirection(row.direction) : null,
-        setup_type: row.setup_type ? mapSetupType(row.setup_type) : 'Other',
-        entry_price: row.entry_price ? parseFloat(row.entry_price.replace(/[$,]/g,'')) : null,
-        exit_price: row.exit_price ? parseFloat(row.exit_price.replace(/[$,]/g,'')) : null,
-        pnl: row.pnl ? parseFloat(row.pnl.replace(/[$,]/g,'')) : null,
-        contracts: row.contracts ? parseInt(row.contracts) : null,
-        risk_amount: row.risk_amount ? parseFloat(row.risk_amount.replace(/[$,]/g,'')) : null,
-        notes: row.notes ?? null,
-        emotion: row.emotion ?? null,
-        catalyst: row.catalyst ?? null,
-      }))
-      const { error } = await supabase.from('trades').insert(inserts)
+      const inserts = csvParsed.map(row => {
+        let notesText = row.notes && row.notes.trim() ? row.notes.trim() : null
+        if (row.trade_type && row.trade_type.trim()) {
+          const prefix = `[${row.trade_type.trim()}]`
+          notesText = notesText ? `${prefix} ${notesText}` : prefix
+        }
+        return {
+          user_id: user.id,
+          date: parseDate(row.date ?? '') ?? new Date().toISOString().split("T")[0],
+          ticker: (row.ticker ?? 'UNKNOWN').toUpperCase(),
+          direction: row.direction ? mapDirection(row.direction) : null,
+          setup_type: row.setup_type ? mapSetupType(row.setup_type) : 'Other',
+          entry_price: row.entry_price ? parseFloat(row.entry_price.replace(/[$,]/g,'')) : null,
+          exit_price: row.exit_price ? parseFloat(row.exit_price.replace(/[$,]/g,'')) : null,
+          pnl: row.pnl ? parseFloat(row.pnl.replace(/[$,]/g,'')) : null,
+          contracts: row.contracts ? parseInt(row.contracts) : null,
+          risk_amount: row.risk_amount ? parseFloat(row.risk_amount.replace(/[$,]/g,'')) : null,
+          notes: notesText,
+          emotion: row.emotion ?? null,
+          catalyst: row.catalyst ?? null,
+          followed_plan: row.followed_plan ? mapFollowedPlan(row.followed_plan) : null,
+        }
+      })
+      const { data: insertedTrades, error } = await supabase.from('trades').insert(inserts).select('id, ticker, date, notes')
       if (error) { toast.error('Import failed: ' + error.message); return }
-      toast.success(`${inserts.length} trades imported!`)
+
+      const journalInserts = (insertedTrades ?? [])
+        .filter(t => t.notes && t.notes.trim())
+        .map(t => ({
+          user_id: user.id,
+          trade_id: t.id,
+          date: t.date,
+          title: `${t.ticker} — ${t.date}`,
+          content: t.notes,
+          mood: null,
+        }))
+
+      let journalCount = 0
+      if (journalInserts.length > 0) {
+        const { error: journalError } = await supabase.from('journal_entries').insert(journalInserts)
+        if (!journalError) journalCount = journalInserts.length
+      }
+
+      const tradeCount = inserts.length
+      toast.success(journalCount > 0
+        ? `${tradeCount} trades imported + ${journalCount} journal entries created`
+        : `${tradeCount} trades imported!`
+      )
       setShowCsvModal(false)
       setCsvParsed([])
       setCsvPreview([])
