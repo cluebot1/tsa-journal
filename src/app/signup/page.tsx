@@ -10,7 +10,6 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -22,29 +21,12 @@ export default function SignupPage() {
 
     const supabase = createClient()
 
-    // Step 1: Validate invite code (trim + uppercase for safety)
-    const normalizedCode = inviteCode.trim().toUpperCase()
-    const { data: inviteData, error: inviteError } = await supabase
-      .from('invite_codes')
-      .select('*')
-      .eq('code', normalizedCode)
-      .is('used_by', null)
-      .single()
-
-    if (inviteError || !inviteData) {
-      setError('Invalid or already used invite code. Check for typos or extra spaces.')
-      setLoading(false)
-      return
-    }
-
-    // Step 2: Sign up
+    // Sign up
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          full_name: fullName,
-        },
+        data: { full_name: fullName },
       },
     })
 
@@ -61,7 +43,7 @@ export default function SignupPage() {
       return
     }
 
-    // Step 3: Insert into profiles
+    // Insert into profiles
     const { error: profileError } = await supabase.from('profiles').insert({
       id: user.id,
       email: user.email,
@@ -74,18 +56,8 @@ export default function SignupPage() {
       return
     }
 
-    // Step 4: Mark invite code as used
-    await supabase
-      .from('invite_codes')
-      .update({
-        used_by: user.id,
-        used_at: new Date().toISOString(),
-      })
-      .eq('code', normalizedCode)
-
     // Check if email confirmation is needed
-    const needsConfirmation = !signUpData.session
-    if (needsConfirmation) {
+    if (!signUpData.session) {
       setSuccess(true)
       setLoading(false)
       return
@@ -125,13 +97,9 @@ export default function SignupPage() {
           </h1>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor="fullName"
-              className="text-sm font-medium text-[#0D0D1A]"
-            >
+            <label htmlFor="fullName" className="text-sm font-medium text-[#0D0D1A]">
               Full Name
             </label>
             <input
@@ -146,10 +114,7 @@ export default function SignupPage() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium text-[#0D0D1A]"
-            >
+            <label htmlFor="email" className="text-sm font-medium text-[#0D0D1A]">
               Email
             </label>
             <input
@@ -164,16 +129,14 @@ export default function SignupPage() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor="password"
-              className="text-sm font-medium text-[#0D0D1A]"
-            >
+            <label htmlFor="password" className="text-sm font-medium text-[#0D0D1A]">
               Password
             </label>
             <input
               id="password"
               type="password"
               required
+              minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -181,25 +144,6 @@ export default function SignupPage() {
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="inviteCode"
-              className="text-sm font-medium text-[#0D0D1A]"
-            >
-              Invite Code
-            </label>
-            <input
-              id="inviteCode"
-              type="text"
-              required
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value)}
-              placeholder="TSA-XXXX-XXXX"
-              className="w-full px-4 py-3 rounded-xl border border-[#E2DDD6] bg-[#EDE8DF] text-[#0D0D1A] placeholder-[#9CA3AF] text-sm focus:outline-none focus:ring-2 focus:ring-[#0D0D1A] transition"
-            />
-          </div>
-
-          {/* Error */}
           {error && (
             <p className="text-[#EF4444] text-sm text-center">{error}</p>
           )}
@@ -213,18 +157,14 @@ export default function SignupPage() {
           </button>
         </form>
 
-        {/* Footer links */}
         <p className="text-center text-sm text-[#6B6B6B] mt-6">
           Already have an account?{' '}
-          <Link
-            href="/login"
-            className="text-[#0D0D1A] font-semibold hover:opacity-70 transition-opacity"
-          >
+          <Link href="/login" className="text-[#0D0D1A] font-semibold hover:opacity-70 transition-opacity">
             Sign in
           </Link>
         </p>
         <p className="text-center text-xs text-[#9CA3AF] mt-3">
-          This portal is for TSA members only.
+          TSA members only.
         </p>
       </div>
     </div>
