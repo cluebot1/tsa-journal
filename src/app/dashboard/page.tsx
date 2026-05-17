@@ -13,7 +13,7 @@ interface Trade {
   user_id: string
   date: string
   ticker: string
-  setup: string
+  setup_type: string
   direction: 'Long' | 'Short'
   pnl: number | null
   notes?: string | null
@@ -259,10 +259,10 @@ export default async function DashboardPage() {
                             <td className="px-6 py-4">
                               <span
                                 className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${
-                                  setupColors[trade.setup] ?? 'bg-gray-50 text-gray-700'
+                                  setupColors[trade.setup_type] ?? 'bg-gray-50 text-gray-700'
                                 }`}
                               >
-                                {trade.setup}
+                                {trade.setup_type}
                               </span>
                             </td>
                             <td
@@ -292,10 +292,10 @@ export default async function DashboardPage() {
                           <p className="text-xs text-[#0D0D1A]/50 mt-0.5">{formatDate(trade.date)}</p>
                           <span
                             className={`inline-flex items-center mt-1.5 px-2 py-0.5 rounded-md text-xs font-medium ${
-                              setupColors[trade.setup] ?? 'bg-gray-50 text-gray-700'
+                              setupColors[trade.setup_type] ?? 'bg-gray-50 text-gray-700'
                             }`}
                           >
-                            {trade.setup}
+                            {trade.setup_type}
                           </span>
                         </div>
                         <p

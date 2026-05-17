@@ -202,7 +202,7 @@ export default function AnalyticsPage() {
     const totalPnl = setupTrades.reduce((sum, t) => sum + (t.pnl ?? 0), 0)
     return {
       setup,
-      shortName: SETUP_SHORT[setup] ?? setup,
+      shortName: SETUP_SHORT[setup] ?? (setup.length > 16 ? setup.slice(0, 14) + '…' : setup),
       winRate: parseFloat(winRate.toFixed(1)),
       totalPnl: parseFloat(totalPnl.toFixed(2)),
       tradeCount: setupTrades.length,
@@ -355,9 +355,9 @@ export default function AnalyticsPage() {
                 <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
                   <h2 className="text-base font-semibold text-[#0D0D1A] mb-4">Win Rate by Setup</h2>
                   <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={setupStats} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <BarChart data={setupStats} margin={{ top: 4, right: 8, left: 0, bottom: 60 }}>
                       <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" vertical={false} />
-                      <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="shortName" tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6, angle: -35, textAnchor: 'end' }} axisLine={false} tickLine={false} height={64} interval={0} />
                       <YAxis tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} domain={[0, 100]} width={36} />
                       <Tooltip content={<WinRateTooltip />} />
                       <Bar dataKey="winRate" radius={[6, 6, 0, 0]}>
@@ -373,9 +373,9 @@ export default function AnalyticsPage() {
                 <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
                   <h2 className="text-base font-semibold text-[#0D0D1A] mb-4">P&amp;L by Setup</h2>
                   <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={setupStats} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <BarChart data={setupStats} margin={{ top: 4, right: 8, left: 0, bottom: 60 }}>
                       <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" vertical={false} />
-                      <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="shortName" tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6, angle: -35, textAnchor: 'end' }} axisLine={false} tickLine={false} height={64} interval={0} />
                       <YAxis tick={{ fontSize: 11, fill: '#0D0D1A', opacity: 0.6 }} axisLine={false} tickLine={false} tickFormatter={formatDollar} width={48} />
                       <Tooltip content={<CustomBarTooltip />} />
                       <Bar dataKey="totalPnl" radius={[6, 6, 0, 0]}>
