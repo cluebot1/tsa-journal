@@ -546,22 +546,28 @@ export default function AnalyticsPage() {
                         </div>
                       ) : (
                         <ResponsiveContainer width="100%" height={250}>
-                          <ScatterChart margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                          <ScatterChart margin={{ top: 4, right: 8, left: 0, bottom: 28 }}>
                             <CartesianGrid stroke="#E2DDD6" strokeDasharray="4 4" />
                             <XAxis
                               dataKey="x"
                               type="number"
                               domain={emotionXDomain as [number, number]}
                               scale="time"
+                              ticks={(() => {
+                                const [min, max] = emotionXDomain as [number, number]
+                                if (!min || !max || min === max) return []
+                                const count = 6
+                                const step = (max - min) / (count - 1)
+                                return Array.from({ length: count }, (_, i) => Math.round(min + i * step))
+                              })()}
                               tickFormatter={(v: number) => {
                                 const d = new Date(v)
-                                const mm = String(d.getMonth() + 1).padStart(2, '0')
-                                const dd = String(d.getDate()).padStart(2, '0')
-                                return `${mm}/${dd}`
+                                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                               }}
-                              tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6 }}
+                              tick={{ fontSize: 10, fill: '#0D0D1A', opacity: 0.6, angle: -30, textAnchor: 'end', dy: 4 }}
                               axisLine={false}
                               tickLine={false}
+                              height={44}
                             />
                             <YAxis
                               dataKey="y"
