@@ -13,6 +13,7 @@ export default function SignupPage() {
   const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -21,16 +22,17 @@ export default function SignupPage() {
 
     const supabase = createClient()
 
-    // Step 1: Validate invite code
+    // Step 1: Validate invite code (trim + uppercase for safety)
+    const normalizedCode = inviteCode.trim().toUpperCase()
     const { data: inviteData, error: inviteError } = await supabase
       .from('invite_codes')
       .select('*')
-      .eq('code', inviteCode)
+      .eq('code', normalizedCode)
       .is('used_by', null)
       .single()
 
     if (inviteError || !inviteData) {
-      setError('Invalid or already used invite code.')
+      setError('Invalid or already used invite code. Check for typos or extra spaces.')
       setLoading(false)
       return
     }
@@ -79,10 +81,35 @@ export default function SignupPage() {
         used_by: user.id,
         used_at: new Date().toISOString(),
       })
-      .eq('code', inviteCode)
+      .eq('code', normalizedCode)
+
+    // Check if email confirmation is needed
+    const needsConfirmation = !signUpData.session
+    if (needsConfirmation) {
+      setSuccess(true)
+      setLoading(false)
+      return
+    }
 
     router.push('/dashboard')
     router.refresh()
+  }
+
+  if (success) {
+    return (
+      <div className="font-sans min-h-screen flex items-center justify-center bg-[#EDE8DF] px-4">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-sm p-8 text-center">
+          <div className="text-4xl mb-4">📬</div>
+          <h2 className="text-xl font-bold text-[#0D0D1A] mb-2">Check your email</h2>
+          <p className="text-[#6B6B6B] text-sm mb-6">
+            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account, then come back to log in.
+          </p>
+          <a href="/login" className="bg-[#0D0D1A] text-white px-6 py-3 rounded-xl font-semibold text-sm inline-block hover:opacity-90 transition-opacity">
+            Go to Login
+          </a>
+        </div>
+      </div>
+    )
   }
 
   return (
