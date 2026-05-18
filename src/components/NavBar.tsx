@@ -12,6 +12,7 @@ const navLinks = [
   { label: 'Dashboard', href: '/dashboard' },
   { label: 'Trades', href: '/trades' },
   { label: 'Analytics', href: '/analytics' },
+  { label: 'AI Review', href: '/ai-review' },
   { label: 'Journal', href: '/journal' },
 ]
 
