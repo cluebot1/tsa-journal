@@ -20,6 +20,14 @@ interface Trade {
   created_at?: string
 }
 
+interface CalendarDay {
+  date: string
+  day: number
+  pnl: number
+  tradeCount: number
+  isCurrentMonth: boolean
+}
+
 function formatCurrency(value: number): string {
   const abs = Math.abs(value)
   return `${value < 0 ? '-' : ''}$${abs.toLocaleString('en-US', {
@@ -31,6 +39,26 @@ function formatCurrency(value: number): string {
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function formatCalendarMoney(value: number): string {
+  const abs = Math.abs(value)
+  return `${value >= 0 ? '+' : '-'}$${abs.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`
+}
+
+function toMonthKey(dateStr: string): string {
+  return dateStr.slice(0, 7)
+}
+
+function monthLabel(monthKey: string): string {
+  const [year, month] = monthKey.split('-').map(Number)
+  return new Date(year, month - 1, 1).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  })
 }
 
 export default async function DashboardPage() {
@@ -95,6 +123,41 @@ export default async function DashboardPage() {
     .slice(0, 5)
 
   const isEmpty = allTrades.length === 0
+
+  // P&L Calendar — latest logged month on dashboard
+  const latestTrade = [...allTrades].sort((a, b) => b.date.localeCompare(a.date))[0]
+  const dashboardMonth = latestTrade ? toMonthKey(latestTrade.date) : new Date().toISOString().slice(0, 7)
+  const [calYear, calMonth] = dashboardMonth.split('-').map(Number)
+  const firstOfMonth = new Date(calYear, calMonth - 1, 1)
+  const firstCalendarDay = new Date(firstOfMonth)
+  firstCalendarDay.setDate(firstCalendarDay.getDate() - firstCalendarDay.getDay())
+
+  const pnlByDate: Record<string, { pnl: number; tradeCount: number }> = {}
+  for (const trade of allTrades) {
+    if (!pnlByDate[trade.date]) pnlByDate[trade.date] = { pnl: 0, tradeCount: 0 }
+    pnlByDate[trade.date].pnl += trade.pnl ?? 0
+    pnlByDate[trade.date].tradeCount += 1
+  }
+
+  const calendarDays: CalendarDay[] = Array.from({ length: 42 }, (_, i) => {
+    const day = new Date(firstCalendarDay)
+    day.setDate(firstCalendarDay.getDate() + i)
+    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+    const data = pnlByDate[date]
+    return {
+      date,
+      day: day.getDate(),
+      pnl: Number((data?.pnl ?? 0).toFixed(2)),
+      tradeCount: data?.tradeCount ?? 0,
+      isCurrentMonth: day.getMonth() === calMonth - 1,
+    }
+  })
+
+  const dashboardMonthTrades = allTrades.filter((t) => toMonthKey(t.date) === dashboardMonth)
+  const dashboardMonthPnl = dashboardMonthTrades.reduce((sum, t) => sum + (t.pnl ?? 0), 0)
+  const dashboardTradedDays = calendarDays.filter((d) => d.isCurrentMonth && d.tradeCount > 0).length
+  const dashboardGreenDays = calendarDays.filter((d) => d.isCurrentMonth && d.tradeCount > 0 && d.pnl > 0).length
+  const dashboardRedDays = calendarDays.filter((d) => d.isCurrentMonth && d.tradeCount > 0 && d.pnl < 0).length
 
   // Setup badge color helper
   const setupColors: Record<string, string> = {
@@ -256,6 +319,71 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <>
+              {/* ── P&L Calendar ── */}
+              <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-4 md:p-6 mb-6">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h2 className="text-base font-semibold text-[#0D0D1A]">P&amp;L Calendar</h2>
+                    <p className="text-xs text-[#0D0D1A]/45 mt-1">{monthLabel(dashboardMonth)} daily net P&amp;L</p>
+                  </div>
+                  <Link href="/analytics" className="text-sm text-[#0D0D1A]/50 hover:text-[#0D0D1A] transition-colors font-medium whitespace-nowrap">
+                    Details →
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="rounded-2xl bg-[#F8F5EF] border border-[#E2DDD6] p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-[#0D0D1A]/45 font-semibold">Month</p>
+                    <p className={`text-lg md:text-xl font-bold ${dashboardMonthPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                      {dashboardMonthPnl >= 0 ? '+' : ''}{formatCurrency(dashboardMonthPnl)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[#F8F5EF] border border-[#E2DDD6] p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-[#0D0D1A]/45 font-semibold">Traded Days</p>
+                    <p className="text-lg md:text-xl font-bold text-[#0D0D1A]">{dashboardTradedDays}</p>
+                  </div>
+                  <div className="rounded-2xl bg-[#F8F5EF] border border-[#E2DDD6] p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-[#0D0D1A]/45 font-semibold">Green / Red</p>
+                    <p className="text-lg md:text-xl font-bold text-[#0D0D1A]"><span className="text-[#22C55E]">{dashboardGreenDays}</span> / <span className="text-[#EF4444]">{dashboardRedDays}</span></p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1.5 md:gap-2">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                    <div key={day} className="text-center text-[10px] md:text-xs font-semibold uppercase tracking-wide text-[#0D0D1A]/35 pb-1">{day}</div>
+                  ))}
+                  {calendarDays.map((day) => {
+                    const hasTrade = day.tradeCount > 0
+                    const isGreen = day.pnl > 0
+                    const isRed = day.pnl < 0
+                    return (
+                      <div
+                        key={day.date}
+                        className={`min-h-[58px] md:min-h-[88px] rounded-xl border p-1.5 md:p-2 flex flex-col justify-between ${
+                          !day.isCurrentMonth
+                            ? 'bg-[#F8F5EF]/45 border-[#E2DDD6]/45 text-[#0D0D1A]/25'
+                            : hasTrade && isGreen
+                              ? 'bg-[#DCFCE7] border-[#86EFAC] text-[#14532D]'
+                              : hasTrade && isRed
+                                ? 'bg-[#FEE2E2] border-[#FCA5A5] text-[#7F1D1D]'
+                                : 'bg-[#F8F5EF] border-[#E2DDD6] text-[#0D0D1A]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <span className="text-[10px] md:text-sm font-semibold opacity-70">{day.day}</span>
+                          {hasTrade && <span className="text-[8px] md:text-[10px] font-semibold opacity-60">{day.tradeCount}x</span>}
+                        </div>
+                        {hasTrade ? (
+                          <p className={`text-[10px] md:text-base font-extrabold leading-tight ${isGreen ? 'text-[#16A34A]' : isRed ? 'text-[#DC2626]' : 'text-[#0D0D1A]'}`}>{formatCalendarMoney(day.pnl)}</p>
+                        ) : (
+                          <p className="text-[10px] opacity-30">—</p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
               {/* ── Equity Chart ── */}
               <div className="mb-6">
                 <EquityChart trades={allTrades.map((t) => ({ date: t.date, pnl: t.pnl }))} />
