@@ -324,32 +324,32 @@ export default async function DashboardPage() {
           ) : (
             <>
               {/* ── P&L Calendar ── */}
-              <div className="relative overflow-hidden rounded-[28px] border border-[#E2DDD6] bg-[#0D0D1A] p-4 md:p-6 mb-6 shadow-sm">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(201,168,76,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(34,197,94,0.10),transparent_30%)]" />
+              <div className="relative overflow-hidden rounded-[28px] border border-[#E2DDD6] bg-white p-4 md:p-6 mb-6 shadow-sm">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(201,168,76,0.12),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(237,232,223,0.95),transparent_34%)]" />
                 <div className="relative">
                   <div className="flex items-start justify-between gap-4 mb-5">
                     <div>
                       <p className="text-[10px] uppercase tracking-[0.22em] text-[#C9A84C] font-semibold mb-2">Performance Heatmap</p>
-                      <h2 className="text-xl md:text-2xl font-bold text-white">P&amp;L Calendar</h2>
-                      <p className="text-xs text-white/45 mt-1">{monthLabel(dashboardMonth)} daily net P&amp;L</p>
+                      <h2 className="text-xl md:text-2xl font-bold text-[#0D0D1A]">P&amp;L Calendar</h2>
+                      <p className="text-xs text-[#0D0D1A]/45 mt-1">{monthLabel(dashboardMonth)} daily net P&amp;L</p>
                     </div>
-                    <Link href="/analytics" className="rounded-full bg-white/10 border border-white/10 px-3 py-2 text-xs md:text-sm text-white/70 hover:text-white hover:bg-white/15 transition-colors font-medium whitespace-nowrap">
+                    <Link href="/analytics" className="rounded-full bg-[#F8F5EF] border border-[#E2DDD6] px-3 py-2 text-xs md:text-sm text-[#0D0D1A]/55 hover:text-[#0D0D1A] hover:bg-[#EDE8DF] transition-colors font-medium whitespace-nowrap">
                       Details →
                     </Link>
                   </div>
 
-                  <div className="rounded-3xl bg-white/[0.06] border border-white/10 p-4 mb-4">
+                  <div className="rounded-3xl bg-[#F8F5EF] border border-[#E2DDD6] p-4 mb-4">
                     <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                       <div>
-                        <p className="text-xs text-white/45 mb-1">Month P&amp;L</p>
-                        <p className={`text-4xl md:text-5xl font-black tracking-tight ${dashboardMonthPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+                        <p className="text-xs text-[#0D0D1A]/45 mb-1">Month P&amp;L</p>
+                        <p className={`text-4xl md:text-5xl font-black tracking-tight ${dashboardMonthPnl >= 0 ? 'text-[#16A34A]' : 'text-[#DC2626]'}`}>
                           {dashboardMonthPnl >= 0 ? '+' : ''}{formatCurrency(dashboardMonthPnl)}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <span className="rounded-full bg-white/10 border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/75">{dashboardTradedDays} traded days</span>
-                        <span className="rounded-full bg-[#22C55E]/15 border border-[#22C55E]/20 px-3 py-1.5 text-xs font-semibold text-[#86EFAC]">{dashboardGreenDays} green</span>
-                        <span className="rounded-full bg-[#EF4444]/15 border border-[#EF4444]/20 px-3 py-1.5 text-xs font-semibold text-[#FCA5A5]">{dashboardRedDays} red</span>
+                        <span className="rounded-full bg-white border border-[#E2DDD6] px-3 py-1.5 text-xs font-semibold text-[#0D0D1A]/65">{dashboardTradedDays} traded days</span>
+                        <span className="rounded-full bg-[#DCFCE7] border border-[#BBF7D0] px-3 py-1.5 text-xs font-semibold text-[#15803D]">{dashboardGreenDays} green</span>
+                        <span className="rounded-full bg-[#FEE2E2] border border-[#FECACA] px-3 py-1.5 text-xs font-semibold text-[#B91C1C]">{dashboardRedDays} red</span>
                       </div>
                     </div>
                   </div>
@@ -364,20 +364,20 @@ export default async function DashboardPage() {
                     const isRed = day.pnl < 0
                     const intensity = largestAbsDay > 0 ? Math.min(1, Math.abs(day.pnl) / largestAbsDay) : 0
                     const heatClass = !day.isCurrentMonth
-                      ? 'bg-white/[0.025] border-white/[0.04] text-white/15'
+                      ? 'bg-[#F8F5EF]/45 border-[#E2DDD6]/45 text-[#0D0D1A]/20'
                       : hasTrade && isGreen && intensity > 0.66
-                        ? 'bg-[#16A34A] border-[#86EFAC]/40 text-white shadow-[0_0_22px_rgba(34,197,94,0.25)]'
+                        ? 'bg-[#16A34A] border-[#86EFAC] text-white shadow-sm'
                         : hasTrade && isGreen && intensity > 0.33
-                          ? 'bg-[#22C55E]/70 border-[#86EFAC]/35 text-white'
+                          ? 'bg-[#86EFAC] border-[#4ADE80] text-[#14532D]'
                           : hasTrade && isGreen
-                            ? 'bg-[#22C55E]/22 border-[#22C55E]/35 text-[#BBF7D0]'
+                            ? 'bg-[#DCFCE7] border-[#BBF7D0] text-[#166534]'
                             : hasTrade && isRed && intensity > 0.66
-                              ? 'bg-[#DC2626] border-[#FCA5A5]/40 text-white shadow-[0_0_22px_rgba(239,68,68,0.24)]'
+                              ? 'bg-[#DC2626] border-[#FCA5A5] text-white shadow-sm'
                               : hasTrade && isRed && intensity > 0.33
-                                ? 'bg-[#EF4444]/70 border-[#FCA5A5]/35 text-white'
+                                ? 'bg-[#FCA5A5] border-[#F87171] text-[#7F1D1D]'
                                 : hasTrade && isRed
-                                  ? 'bg-[#EF4444]/22 border-[#EF4444]/35 text-[#FECACA]'
-                                  : 'bg-white/[0.045] border-white/[0.07] text-white/35'
+                                  ? 'bg-[#FEE2E2] border-[#FECACA] text-[#991B1B]'
+                                  : 'bg-[#F8F5EF] border-[#E2DDD6] text-[#0D0D1A]/35'
                     return (
                       <div
                         key={day.date}
@@ -385,7 +385,7 @@ export default async function DashboardPage() {
                       >
                         <div className="flex items-start justify-between gap-1">
                           <span className="text-[10px] md:text-sm font-bold opacity-75">{day.day}</span>
-                          {hasTrade && <span className="rounded-full bg-black/15 px-1.5 py-0.5 text-[8px] md:text-[10px] font-bold opacity-75">{day.tradeCount}x</span>}
+                          {hasTrade && <span className="rounded-full bg-white/55 px-1.5 py-0.5 text-[8px] md:text-[10px] font-bold opacity-75">{day.tradeCount}x</span>}
                         </div>
                         {hasTrade ? (
                           <p className="text-[10px] md:text-base font-black leading-tight tracking-tight">{formatCalendarMoney(day.pnl)}</p>
@@ -398,17 +398,17 @@ export default async function DashboardPage() {
                   </div>
 
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
-                    <div className="rounded-2xl bg-white/[0.06] border border-white/10 p-3">
-                      <p className="text-[10px] uppercase tracking-wide text-white/35 font-semibold">Best Day</p>
-                      <p className="text-lg font-black text-[#22C55E]">{bestCalendarDay ? formatCalendarMoney(bestCalendarDay.pnl) : '—'}</p>
+                    <div className="rounded-2xl bg-[#F8F5EF] border border-[#E2DDD6] p-3">
+                      <p className="text-[10px] uppercase tracking-wide text-[#0D0D1A]/40 font-semibold">Best Day</p>
+                      <p className="text-lg font-black text-[#16A34A]">{bestCalendarDay ? formatCalendarMoney(bestCalendarDay.pnl) : '—'}</p>
                     </div>
-                    <div className="rounded-2xl bg-white/[0.06] border border-white/10 p-3">
-                      <p className="text-[10px] uppercase tracking-wide text-white/35 font-semibold">Worst Day</p>
-                      <p className="text-lg font-black text-[#EF4444]">{worstCalendarDay ? formatCalendarMoney(worstCalendarDay.pnl) : '—'}</p>
+                    <div className="rounded-2xl bg-[#F8F5EF] border border-[#E2DDD6] p-3">
+                      <p className="text-[10px] uppercase tracking-wide text-[#0D0D1A]/40 font-semibold">Worst Day</p>
+                      <p className="text-lg font-black text-[#DC2626]">{worstCalendarDay ? formatCalendarMoney(worstCalendarDay.pnl) : '—'}</p>
                     </div>
-                    <div className="rounded-2xl bg-white/[0.06] border border-white/10 p-3">
-                      <p className="text-[10px] uppercase tracking-wide text-white/35 font-semibold">Legend</p>
-                      <p className="text-xs text-white/55 mt-1">Light = small day · Dark = big day</p>
+                    <div className="rounded-2xl bg-[#F8F5EF] border border-[#E2DDD6] p-3">
+                      <p className="text-[10px] uppercase tracking-wide text-[#0D0D1A]/40 font-semibold">Legend</p>
+                      <p className="text-xs text-[#0D0D1A]/50 mt-1">Light = small day · Dark = big day</p>
                     </div>
                   </div>
                 </div>
