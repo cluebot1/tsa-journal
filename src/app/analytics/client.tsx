@@ -74,6 +74,14 @@ interface MonthStat {
   pnl: number
 }
 
+interface CalendarDay {
+  date: string
+  day: number
+  pnl: number
+  tradeCount: number
+  isCurrentMonth: boolean
+}
+
 interface EmotionStat {
   emotion: string
   winRate: number
@@ -98,6 +106,27 @@ function formatDollar(v: number): string {
       ? `$${(abs / 1000).toFixed(1)}k`
       : `$${abs.toFixed(0)}`
   return v < 0 ? `-${formatted}` : formatted
+}
+
+function formatMoney(v: number): string {
+  const abs = Math.abs(v)
+  const formatted = abs.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })
+  return `${v >= 0 ? '+' : '-'}$${formatted}`
+}
+
+function toMonthKey(dateStr: string): string {
+  return dateStr.slice(0, 7)
+}
+
+function monthLabel(monthKey: string): string {
+  const [year, month] = monthKey.split('-').map(Number)
+  return new Date(year, month - 1, 1).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  })
 }
 
 interface CustomBarTooltipProps {
@@ -169,6 +198,7 @@ export default function AnalyticsPage() {
   const [userEmail, setUserEmail] = useState<string | undefined>(undefined)
   const [showHelp, setShowHelp] = useState(false)
   const [timelineRange, setTimelineRange] = useState<'7d' | '30d' | '90d' | 'all'>('all')
+  const [selectedMonth, setSelectedMonth] = useState<string>('')
 
   const fetchTrades = useCallback(async () => {
     setLoading(true)
@@ -184,7 +214,14 @@ export default function AnalyticsPage() {
         .select('*')
         .eq('user_id', user.id)
         .order('date', { ascending: true })
-      setTrades(data ?? [])
+      const fetchedTrades = data ?? []
+      setTrades(fetchedTrades)
+      if (fetchedTrades.length > 0) {
+        const latestTrade = [...fetchedTrades].sort((a, b) => b.date.localeCompare(a.date))[0]
+        setSelectedMonth((current) => current || toMonthKey(latestTrade.date))
+      } else {
+        setSelectedMonth(new Date().toISOString().slice(0, 7))
+      }
     } finally {
       setLoading(false)
     }
@@ -238,6 +275,41 @@ export default function AnalyticsPage() {
     const date = new Date(parseInt(year), parseInt(month) - 1, 1)
     return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
   }
+
+  // ─── P&L Calendar ─────────────────────────────────────────────────────────
+  const monthOptions = Object.keys(monthMap).sort((a, b) => b.localeCompare(a))
+  const activeMonth = selectedMonth || monthOptions[0] || new Date().toISOString().slice(0, 7)
+  const [calYear, calMonth] = activeMonth.split('-').map(Number)
+  const firstOfMonth = new Date(calYear, calMonth - 1, 1)
+  const firstCalendarDay = new Date(firstOfMonth)
+  firstCalendarDay.setDate(firstCalendarDay.getDate() - firstCalendarDay.getDay())
+
+  const pnlByDate: Record<string, { pnl: number; tradeCount: number }> = {}
+  for (const trade of trades) {
+    const key = trade.date
+    if (!pnlByDate[key]) pnlByDate[key] = { pnl: 0, tradeCount: 0 }
+    pnlByDate[key].pnl += trade.pnl ?? 0
+    pnlByDate[key].tradeCount += 1
+  }
+
+  const calendarDays: CalendarDay[] = Array.from({ length: 42 }, (_, i) => {
+    const day = new Date(firstCalendarDay)
+    day.setDate(firstCalendarDay.getDate() + i)
+    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+    const data = pnlByDate[date]
+    return {
+      date,
+      day: day.getDate(),
+      pnl: parseFloat((data?.pnl ?? 0).toFixed(2)),
+      tradeCount: data?.tradeCount ?? 0,
+      isCurrentMonth: day.getMonth() === calMonth - 1,
+    }
+  })
+  const calendarMonthTrades = trades.filter((t) => toMonthKey(t.date) === activeMonth)
+  const calendarMonthPnl = calendarMonthTrades.reduce((sum, t) => sum + (t.pnl ?? 0), 0)
+  const calendarWinningDays = calendarDays.filter((d) => d.isCurrentMonth && d.tradeCount > 0 && d.pnl > 0).length
+  const calendarLosingDays = calendarDays.filter((d) => d.isCurrentMonth && d.tradeCount > 0 && d.pnl < 0).length
+  const calendarTradedDays = calendarDays.filter((d) => d.isCurrentMonth && d.tradeCount > 0).length
 
   // ─── Summary stats ────────────────────────────────────────────────────────
   const winners = trades.filter((t) => (t.pnl ?? 0) > 0)
@@ -359,6 +431,79 @@ export default function AnalyticsPage() {
           {/* Charts */}
           {!loading && !isEmpty && (
             <>
+              <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-4 md:p-6 mb-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-5">
+                  <div>
+                    <h2 className="text-base font-semibold text-[#0D0D1A]">P&amp;L Calendar</h2>
+                    <p className="text-xs text-[#0D0D1A]/45 mt-1">Daily P&amp;L by traded day. Green days paid you. Red days charged tuition.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={activeMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="h-10 rounded-xl border border-[#E2DDD6] bg-[#F8F5EF] px-3 text-sm font-medium text-[#0D0D1A] outline-none focus:border-[#0D0D1A]"
+                    >
+                      {(monthOptions.length > 0 ? monthOptions : [activeMonth]).map((m) => (
+                        <option key={m} value={m}>{monthLabel(m)}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 md:gap-3 mb-4">
+                  <div className="rounded-2xl bg-[#F8F5EF] border border-[#E2DDD6] p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-[#0D0D1A]/45 font-semibold">Month P&amp;L</p>
+                    <p className={`text-lg md:text-xl font-bold ${calendarMonthPnl >= 0 ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>{calendarMonthPnl >= 0 ? '+' : ''}${Math.abs(calendarMonthPnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className="rounded-2xl bg-[#F8F5EF] border border-[#E2DDD6] p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-[#0D0D1A]/45 font-semibold">Traded Days</p>
+                    <p className="text-lg md:text-xl font-bold text-[#0D0D1A]">{calendarTradedDays}</p>
+                  </div>
+                  <div className="rounded-2xl bg-[#F8F5EF] border border-[#E2DDD6] p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-[#0D0D1A]/45 font-semibold">Green / Red</p>
+                    <p className="text-lg md:text-xl font-bold text-[#0D0D1A]"><span className="text-[#22C55E]">{calendarWinningDays}</span> / <span className="text-[#EF4444]">{calendarLosingDays}</span></p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1.5 md:gap-2">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                    <div key={day} className="text-center text-[10px] md:text-xs font-semibold uppercase tracking-wide text-[#0D0D1A]/35 pb-1">{day}</div>
+                  ))}
+                  {calendarDays.map((day) => {
+                    const hasTrade = day.tradeCount > 0
+                    const isGreen = day.pnl > 0
+                    const isRed = day.pnl < 0
+                    return (
+                      <div
+                        key={day.date}
+                        className={`min-h-[70px] md:min-h-[96px] rounded-xl border p-2 flex flex-col justify-between transition-colors ${
+                          !day.isCurrentMonth
+                            ? 'bg-[#F8F5EF]/45 border-[#E2DDD6]/45 text-[#0D0D1A]/25'
+                            : hasTrade && isGreen
+                              ? 'bg-[#DCFCE7] border-[#86EFAC] text-[#14532D]'
+                              : hasTrade && isRed
+                                ? 'bg-[#FEE2E2] border-[#FCA5A5] text-[#7F1D1D]'
+                                : 'bg-[#F8F5EF] border-[#E2DDD6] text-[#0D0D1A]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <span className="text-xs md:text-sm font-semibold opacity-70">{day.day}</span>
+                          {hasTrade && <span className="text-[9px] md:text-[10px] font-semibold opacity-60">{day.tradeCount}x</span>}
+                        </div>
+                        {hasTrade ? (
+                          <div>
+                            <p className={`text-xs md:text-base font-extrabold leading-tight ${isGreen ? 'text-[#16A34A]' : isRed ? 'text-[#DC2626]' : 'text-[#0D0D1A]'}`}>{formatMoney(day.pnl)}</p>
+                            <p className="text-[9px] md:text-[10px] opacity-55 mt-0.5">P&amp;L</p>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] opacity-30">—</p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 {/* Chart 1: Win Rate by Setup */}
                 <div className="bg-white rounded-2xl shadow-sm border border-[#E2DDD6] p-6">
@@ -629,6 +774,7 @@ export default function AnalyticsPage() {
           { label: 'Win Rate by Setup', desc: 'Your best setups ranked. Double down on what works.' },
           { label: 'P&L by Setup', desc: 'Different from win rate — a setup can win 80% but lose money if losers are too big.' },
           { label: 'Best Day of Week', desc: 'Some traders perform better on specific days. This reveals it.' },
+          { label: 'P&L Calendar', desc: 'See exactly which days paid you and which days cost you. Multiple trades on one day are grouped into that day’s net P&L.' },
           { label: 'Monthly P&L', desc: 'Trend over time. Are you improving month over month?' },
           { label: 'Emotion and Performance', desc: 'The most powerful chart. If Anxious trades consistently lose, that IS your edge — stop taking them.' },
         ]}
