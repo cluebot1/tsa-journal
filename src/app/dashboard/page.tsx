@@ -28,6 +28,13 @@ interface CalendarDay {
   isCurrentMonth: boolean
 }
 
+interface CalendarWeekSummary {
+  label: string
+  pnl: number
+  tradedDays: number
+  tradeCount: number
+}
+
 function formatCurrency(value: number): string {
   const abs = Math.abs(value)
   return `${value < 0 ? '-' : ''}$${abs.toLocaleString('en-US', {
@@ -162,6 +169,22 @@ export default async function DashboardPage() {
   const largestAbsDay = tradedCalendarDays.length > 0 ? Math.max(...tradedCalendarDays.map((d) => Math.abs(d.pnl))) : 0
   const bestCalendarDay = tradedCalendarDays.filter((d) => d.pnl > 0).sort((a, b) => b.pnl - a.pnl)[0]
   const worstCalendarDay = tradedCalendarDays.filter((d) => d.pnl < 0).sort((a, b) => a.pnl - b.pnl)[0]
+  const calendarWeekSummaries: CalendarWeekSummary[] = Array.from({ length: Math.ceil(calendarDays.length / 7) }, (_, weekIndex) => {
+    const weekDays = calendarDays
+      .slice(weekIndex * 7, weekIndex * 7 + 7)
+      .filter((day) => day.isCurrentMonth)
+    const tradedDays = weekDays.filter((day) => day.tradeCount > 0)
+    return {
+      label: `Week ${weekIndex + 1}`,
+      pnl: Number(tradedDays.reduce((sum, day) => sum + day.pnl, 0).toFixed(2)),
+      tradedDays: tradedDays.length,
+      tradeCount: tradedDays.reduce((sum, day) => sum + day.tradeCount, 0),
+    }
+  }).filter((_, weekIndex) =>
+    calendarDays
+      .slice(weekIndex * 7, weekIndex * 7 + 7)
+      .some((day) => day.isCurrentMonth)
+  )
 
   // Setup badge color helper
   const setupColors: Record<string, string> = {
@@ -354,47 +377,67 @@ export default async function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-7 gap-1.5 md:gap-2">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                    <div key={day} className="text-center text-[10px] md:text-xs font-semibold uppercase tracking-wide text-[#0D0D1A]/35 pb-1">{day}</div>
-                  ))}
-                  {calendarDays.map((day) => {
-                    const hasTrade = day.tradeCount > 0
-                    const isGreen = day.pnl > 0
-                    const isRed = day.pnl < 0
-                    const intensity = largestAbsDay > 0 ? Math.min(1, Math.abs(day.pnl) / largestAbsDay) : 0
-                    const heatClass = !day.isCurrentMonth
-                      ? 'bg-[#F8F5EF]/45 border-[#E2DDD6]/45 text-[#0D0D1A]/20'
-                      : hasTrade && isGreen && intensity > 0.66
-                        ? 'bg-[#16A34A] border-[#86EFAC] text-white shadow-sm'
-                        : hasTrade && isGreen && intensity > 0.33
-                          ? 'bg-[#86EFAC] border-[#4ADE80] text-[#14532D]'
-                          : hasTrade && isGreen
-                            ? 'bg-[#DCFCE7] border-[#BBF7D0] text-[#166534]'
-                            : hasTrade && isRed && intensity > 0.66
-                              ? 'bg-[#DC2626] border-[#FCA5A5] text-white shadow-sm'
-                              : hasTrade && isRed && intensity > 0.33
-                                ? 'bg-[#FCA5A5] border-[#F87171] text-[#7F1D1D]'
-                                : hasTrade && isRed
-                                  ? 'bg-[#FEE2E2] border-[#FECACA] text-[#991B1B]'
-                                  : 'bg-[#F8F5EF] border-[#E2DDD6] text-[#0D0D1A]/35'
-                    return (
-                      <div
-                        key={day.date}
-                        className={`min-h-[58px] md:min-h-[88px] rounded-2xl border p-1.5 md:p-2 flex flex-col justify-between ${heatClass}`}
-                      >
-                        <div className="flex items-start justify-between gap-1">
-                          <span className="text-[10px] md:text-sm font-bold opacity-75">{day.day}</span>
-                          {hasTrade && <span className="rounded-full bg-white/55 px-1.5 py-0.5 text-[8px] md:text-[10px] font-bold opacity-75">{day.tradeCount}x</span>}
+                  <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_160px] gap-4">
+                    <div className="grid grid-cols-7 gap-1.5 md:gap-2">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                      <div key={day} className="text-center text-[10px] md:text-xs font-semibold uppercase tracking-wide text-[#0D0D1A]/35 pb-1">{day}</div>
+                    ))}
+                    {calendarDays.map((day) => {
+                      const hasTrade = day.tradeCount > 0
+                      const isGreen = day.pnl > 0
+                      const isRed = day.pnl < 0
+                      const intensity = largestAbsDay > 0 ? Math.min(1, Math.abs(day.pnl) / largestAbsDay) : 0
+                      const heatClass = !day.isCurrentMonth
+                        ? 'bg-[#F8F5EF]/45 border-[#E2DDD6]/45 text-[#0D0D1A]/20'
+                        : hasTrade && isGreen && intensity > 0.66
+                          ? 'bg-[#16A34A] border-[#86EFAC] text-white shadow-sm'
+                          : hasTrade && isGreen && intensity > 0.33
+                            ? 'bg-[#86EFAC] border-[#4ADE80] text-[#14532D]'
+                            : hasTrade && isGreen
+                              ? 'bg-[#DCFCE7] border-[#BBF7D0] text-[#166534]'
+                              : hasTrade && isRed && intensity > 0.66
+                                ? 'bg-[#DC2626] border-[#FCA5A5] text-white shadow-sm'
+                                : hasTrade && isRed && intensity > 0.33
+                                  ? 'bg-[#FCA5A5] border-[#F87171] text-[#7F1D1D]'
+                                  : hasTrade && isRed
+                                    ? 'bg-[#FEE2E2] border-[#FECACA] text-[#991B1B]'
+                                    : 'bg-[#F8F5EF] border-[#E2DDD6] text-[#0D0D1A]/35'
+                      return (
+                        <div
+                          key={day.date}
+                          className={`min-h-[58px] md:min-h-[88px] rounded-2xl border p-1.5 md:p-2 flex flex-col justify-between ${heatClass}`}
+                        >
+                          <div className="flex items-start justify-between gap-1">
+                            <span className="text-[10px] md:text-sm font-bold opacity-75">{day.day}</span>
+                            {hasTrade && <span className="rounded-full bg-white/55 px-1.5 py-0.5 text-[8px] md:text-[10px] font-bold opacity-75">{day.tradeCount}x</span>}
+                          </div>
+                          {hasTrade ? (
+                            <p className="text-[10px] md:text-base font-black leading-tight tracking-tight">{formatCalendarMoney(day.pnl)}</p>
+                          ) : (
+                            <p className="text-[10px] opacity-20">—</p>
+                          )}
                         </div>
-                        {hasTrade ? (
-                          <p className="text-[10px] md:text-base font-black leading-tight tracking-tight">{formatCalendarMoney(day.pnl)}</p>
-                        ) : (
-                          <p className="text-[10px] opacity-20">—</p>
-                        )}
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-1 gap-2 xl:pt-6">
+                      {calendarWeekSummaries.map((week) => {
+                        const isGreen = week.pnl > 0
+                        const isRed = week.pnl < 0
+                        return (
+                          <div key={week.label} className="rounded-2xl bg-[#F8F5EF] border border-[#E2DDD6] p-3 md:p-4 min-h-[86px] flex flex-col justify-center">
+                            <p className="text-[10px] md:text-xs uppercase tracking-wide text-[#0D0D1A]/45 font-bold mb-1">{week.label}</p>
+                            <p className={`text-xl md:text-2xl font-black leading-tight ${isGreen ? 'text-[#16A34A]' : isRed ? 'text-[#DC2626]' : 'text-[#0D0D1A]/45'}`}>
+                              {week.pnl === 0 ? '$0' : formatCalendarMoney(week.pnl)}
+                            </p>
+                            <p className="mt-1 text-[10px] md:text-xs text-[#0D0D1A]/45 font-semibold">
+                              {week.tradedDays} day{week.tradedDays === 1 ? '' : 's'} · {week.tradeCount} trade{week.tradeCount === 1 ? '' : 's'}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
 
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
