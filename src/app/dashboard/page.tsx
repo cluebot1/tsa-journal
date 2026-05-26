@@ -185,6 +185,8 @@ export default async function DashboardPage() {
       .slice(weekIndex * 7, weekIndex * 7 + 7)
       .some((day) => day.isCurrentMonth)
   )
+  const calendarWeekTotalPnl = Number(calendarWeekSummaries.reduce((sum, week) => sum + week.pnl, 0).toFixed(2))
+  const calendarWeekTotalTrades = calendarWeekSummaries.reduce((sum, week) => sum + week.tradeCount, 0)
 
   // Setup badge color helper
   const setupColors: Record<string, string> = {
@@ -442,6 +444,15 @@ export default async function DashboardPage() {
                           </div>
                         )
                       })}
+                        <div className="col-span-2 sm:col-span-3 xl:col-span-1 rounded-2xl bg-[#0D0D1A] border border-[#0D0D1A] p-3 md:p-4 min-h-[92px] flex flex-col justify-center shadow-sm">
+                          <p className="text-[10px] md:text-xs uppercase tracking-wide text-white/55 font-black mb-1">Month P&amp;L</p>
+                          <p className={`text-2xl md:text-3xl font-black leading-tight ${calendarWeekTotalPnl >= 0 ? 'text-[#4ADE80]' : 'text-[#F87171]'}`}>
+                            {calendarWeekTotalPnl === 0 ? '$0' : formatCalendarMoney(calendarWeekTotalPnl)}
+                          </p>
+                          <p className="mt-1 text-[10px] md:text-xs text-white/45 font-semibold">
+                            Total from weekly cards · {calendarWeekTotalTrades} trade{calendarWeekTotalTrades === 1 ? '' : 's'}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
