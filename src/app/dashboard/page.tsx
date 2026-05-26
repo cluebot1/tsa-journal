@@ -421,7 +421,12 @@ export default async function DashboardPage() {
                     })}
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-1 gap-2 xl:pt-6">
+                    <div className="xl:pt-6">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="text-[10px] md:text-xs uppercase tracking-[0.18em] text-[#0D0D1A]/45 font-black">Weekly P&amp;L</p>
+                        <p className="text-[10px] text-[#0D0D1A]/35 font-semibold xl:hidden">Based on journaled trades</p>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-1 gap-2">
                       {calendarWeekSummaries.map((week) => {
                         const isGreen = week.pnl > 0
                         const isRed = week.pnl < 0
@@ -437,6 +442,7 @@ export default async function DashboardPage() {
                           </div>
                         )
                       })}
+                      </div>
                     </div>
                   </div>
 
