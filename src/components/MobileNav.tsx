@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, BarChart2, LineChart, BookOpen, BrainCircuit } from 'lucide-react'
+import { LayoutDashboard, BarChart2, LineChart, BookOpen, BrainCircuit, Calculator } from 'lucide-react'
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', Icon: LayoutDashboard },
   { label: 'Trades', href: '/trades', Icon: BarChart2 },
   { label: 'Analytics', href: '/analytics', Icon: LineChart },
-  { label: 'AI Review', href: '/ai-review', Icon: BrainCircuit },
+  { label: 'Compound', href: '/compounding', Icon: Calculator },
+  { label: 'AI', href: '/ai-review', Icon: BrainCircuit },
   { label: 'Journal', href: '/journal', Icon: BookOpen },
 ]
 
