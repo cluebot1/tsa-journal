@@ -30,6 +30,16 @@ interface AccountabilityRow {
   vsRoadMap: number | null
 }
 
+interface Milestone {
+  label: string
+  target: number
+  type: 'balance' | 'profit'
+  emoji: string
+  day: number | null
+  achieved: boolean
+  progress: number
+}
+
 function money(value: number): string {
   const sign = value < 0 ? '-' : ''
   return `${sign}$${Math.abs(value).toLocaleString('en-US', {
@@ -47,6 +57,12 @@ function pct(value: number): string {
     minimumFractionDigits: value % 1 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   })}%`
+}
+
+function milestoneProgress(current: number, start: number, target: number, type: 'balance' | 'profit'): number {
+  if (type === 'profit') return Math.min(Math.max(((current - start) / target) * 100, 0), 100)
+  if (target <= start) return current >= target ? 100 : 0
+  return Math.min(Math.max(((current - start) / (target - start)) * 100, 0), 100)
 }
 
 function WeekBreak({ week, columns }: { week: number; columns: number }) {
@@ -128,6 +144,34 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
     const completedRows = accountabilityRows.filter((row) => row.endBalance != null)
     const latestActual = completedRows.length ? completedRows[completedRows.length - 1].endBalance! : start
     const latestRoad = completedRows.length ? roadRows[completedRows.length - 1].balance : start
+    const actualBalances = completedRows.map((row) => row.endBalance!)
+
+    const rawMilestones = [
+      { label: 'First +$100', target: 100, type: 'profit' as const, emoji: '🌱' },
+      { label: 'First +$500', target: 500, type: 'profit' as const, emoji: '🔥' },
+      { label: 'First +$1K', target: 1000, type: 'profit' as const, emoji: '🏆' },
+      { label: 'Account Doubled', target: start * 2, type: 'balance' as const, emoji: '💎' },
+      { label: '$5K Account', target: 5000, type: 'balance' as const, emoji: '🧱' },
+      { label: '$10K Account', target: 10000, type: 'balance' as const, emoji: '🚀' },
+      { label: '$25K Account', target: 25000, type: 'balance' as const, emoji: '👑' },
+    ].filter((m) => (m.type === 'profit' ? m.target > 0 : m.target > start))
+
+    const milestones: Milestone[] = rawMilestones.map((m) => {
+      const achievedIndex = actualBalances.findIndex((balance) =>
+        m.type === 'profit' ? balance - start >= m.target : balance >= m.target
+      )
+      const roadIndex = roadRows.findIndex((row) =>
+        m.type === 'profit' ? row.totalEarnings >= m.target : row.balance >= m.target
+      )
+      return {
+        ...m,
+        day: achievedIndex >= 0 ? achievedIndex + 1 : roadIndex >= 0 ? roadIndex + 1 : null,
+        achieved: achievedIndex >= 0,
+        progress: milestoneProgress(latestActual, start, m.target, m.type),
+      }
+    })
+
+    const nextMilestone = milestones.find((m) => !m.achieved) ?? milestones[milestones.length - 1]
 
     return {
       start,
@@ -142,6 +186,8 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
       latestActual,
       latestRoad,
       actualVsRoad: latestActual - latestRoad,
+      milestones,
+      nextMilestone,
     }
   }, [startingBalance, dailyTarget, weeks, trades])
 
@@ -214,6 +260,50 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
             <div className="bg-white rounded-xl border border-[#D8D0C4] p-4">
               <p className="text-[10px] font-black uppercase tracking-wide text-[#0D0D1A]/45">Actual vs Map</p>
               <p className={`text-lg font-black mt-1 ${data.actualVsRoad >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{signedMoney(data.actualVsRoad)}</p>
+            </div>
+          </div>
+
+          <div className="bg-white border-2 border-[#111] rounded-2xl p-4 mb-5">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0D0D1A]/45">Milestone Map</p>
+                <h2 className="text-lg font-black text-[#0D0D1A]">Turn account growth into checkpoints.</h2>
+              </div>
+              {data.nextMilestone && (
+                <div className="rounded-xl border border-[#D8D0C4] bg-[#F7F3ED] px-4 py-3 text-sm">
+                  <span className="font-black">Next:</span> {data.nextMilestone.emoji} {data.nextMilestone.label}
+                  {data.nextMilestone.day ? <span className="text-[#0D0D1A]/50"> · Road map day {data.nextMilestone.day}</span> : null}
+                </div>
+              )}
+            </div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {data.milestones.map((milestone) => (
+                <div
+                  key={milestone.label}
+                  className={`rounded-xl border p-4 ${milestone.achieved ? 'bg-emerald-50 border-emerald-300' : 'bg-[#F7F3ED] border-[#D8D0C4]'}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-2xl">{milestone.emoji}</p>
+                      <h3 className="font-black text-[#0D0D1A] mt-1">{milestone.label}</h3>
+                      <p className="text-xs text-[#0D0D1A]/55 mt-1">
+                        {milestone.type === 'profit' ? `${money(milestone.target)} total profit` : `${money(milestone.target)} balance`}
+                      </p>
+                    </div>
+                    <span className={`text-[10px] font-black uppercase rounded-full px-2 py-1 ${milestone.achieved ? 'bg-emerald-600 text-white' : 'bg-white text-[#0D0D1A]/50 border border-[#D8D0C4]'}`}>
+                      {milestone.achieved ? 'Unlocked' : milestone.day ? `Day ${milestone.day}` : 'Future'}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white border border-[#D8D0C4] mt-4 overflow-hidden">
+                    <div
+                      className={milestone.achieved ? 'h-full bg-emerald-600' : 'h-full bg-[#0B4FD8]'}
+                      style={{ width: `${milestone.progress}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] font-bold text-[#0D0D1A]/55 mt-2">{pct(milestone.progress)} complete</p>
+                </div>
+              ))}
             </div>
           </div>
 
