@@ -76,19 +76,20 @@ function WeekBreak({ week, columns }: { week: number; columns: number }) {
 }
 
 export default function CompoundingClient({ userEmail, initialStartingBalance, trades }: Props) {
-  const [startingBalance, setStartingBalance] = useState(
-    initialStartingBalance != null ? String(initialStartingBalance) : '3330'
-  )
+  const defaultBalance = initialStartingBalance != null ? String(initialStartingBalance) : '3330'
+  const [roadMapStartingBalance, setRoadMapStartingBalance] = useState(defaultBalance)
+  const [actualStartingBalance, setActualStartingBalance] = useState(defaultBalance)
   const [dailyTarget, setDailyTarget] = useState('2')
   const [weeks, setWeeks] = useState('52')
 
   const data = useMemo(() => {
-    const start = Math.max(Number(startingBalance) || 0, 0)
+    const roadStart = Math.max(Number(roadMapStartingBalance) || 0, 0)
+    const actualStart = Math.max(Number(actualStartingBalance) || 0, 0)
     const rate = Math.max(Number(dailyTarget) || 0, 0) / 100
     const weekCount = Math.min(Math.max(Number(weeks) || 1, 1), 52)
     const dayCount = weekCount * 5
 
-    let roadBalance = start
+    let roadBalance = roadStart
     const roadRows: RoadRow[] = []
     for (let day = 1; day <= dayCount; day++) {
       const initialBalance = roadBalance
@@ -99,7 +100,7 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
         week: Math.ceil(day / 5),
         initialBalance,
         goal,
-        totalEarnings: balance - start,
+        totalEarnings: balance - roadStart,
         balance,
       })
       roadBalance = balance
@@ -113,7 +114,7 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
       .sort()
       .map((date) => pnlByDate[date])
 
-    let actualBalance = start
+    let actualBalance = actualStart
     const accountabilityRows: AccountabilityRow[] = []
     for (let day = 1; day <= dayCount; day++) {
       const initialBalance = actualBalance
@@ -125,7 +126,7 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
       if (dailyPnl != null) {
         actualBalance += dailyPnl
         endBalance = actualBalance
-        totalEarnings = endBalance - start
+        totalEarnings = endBalance - actualStart
         vsRoadMap = endBalance - roadRows[day - 1].balance
       }
 
@@ -140,25 +141,25 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
       })
     }
 
-    const finalRoadBalance = roadRows[roadRows.length - 1]?.balance ?? start
+    const finalRoadBalance = roadRows[roadRows.length - 1]?.balance ?? roadStart
     const completedRows = accountabilityRows.filter((row) => row.endBalance != null)
-    const latestActual = completedRows.length ? completedRows[completedRows.length - 1].endBalance! : start
-    const latestRoad = completedRows.length ? roadRows[completedRows.length - 1].balance : start
+    const latestActual = completedRows.length ? completedRows[completedRows.length - 1].endBalance! : actualStart
+    const latestRoad = completedRows.length ? roadRows[completedRows.length - 1].balance : roadStart
     const actualBalances = completedRows.map((row) => row.endBalance!)
 
     const rawMilestones = [
       { label: 'First +$100', target: 100, type: 'profit' as const, emoji: '🌱' },
       { label: 'First +$500', target: 500, type: 'profit' as const, emoji: '🔥' },
       { label: 'First +$1K', target: 1000, type: 'profit' as const, emoji: '🏆' },
-      { label: 'Account Doubled', target: start * 2, type: 'balance' as const, emoji: '💎' },
+      { label: 'Account Doubled', target: actualStart * 2, type: 'balance' as const, emoji: '💎' },
       { label: '$5K Account', target: 5000, type: 'balance' as const, emoji: '🧱' },
       { label: '$10K Account', target: 10000, type: 'balance' as const, emoji: '🚀' },
       { label: '$25K Account', target: 25000, type: 'balance' as const, emoji: '👑' },
-    ].filter((m) => (m.type === 'profit' ? m.target > 0 : m.target > start))
+    ].filter((m) => (m.type === 'profit' ? m.target > 0 : m.target > actualStart))
 
     const milestones: Milestone[] = rawMilestones.map((m) => {
       const achievedIndex = actualBalances.findIndex((balance) =>
-        m.type === 'profit' ? balance - start >= m.target : balance >= m.target
+        m.type === 'profit' ? balance - actualStart >= m.target : balance >= m.target
       )
       const roadIndex = roadRows.findIndex((row) =>
         m.type === 'profit' ? row.totalEarnings >= m.target : row.balance >= m.target
@@ -167,21 +168,22 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
         ...m,
         day: achievedIndex >= 0 ? achievedIndex + 1 : roadIndex >= 0 ? roadIndex + 1 : null,
         achieved: achievedIndex >= 0,
-        progress: milestoneProgress(latestActual, start, m.target, m.type),
+        progress: milestoneProgress(latestActual, actualStart, m.target, m.type),
       }
     })
 
     const nextMilestone = milestones.find((m) => !m.achieved) ?? milestones[milestones.length - 1]
 
     return {
-      start,
+      roadStart,
+      actualStart,
       rate,
       weekCount,
       dayCount,
       roadRows,
       accountabilityRows,
       finalRoadBalance,
-      totalRoadProfit: finalRoadBalance - start,
+      totalRoadProfit: finalRoadBalance - roadStart,
       completedDays: completedRows.length,
       latestActual,
       latestRoad,
@@ -189,7 +191,7 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
       milestones,
       nextMilestone,
     }
-  }, [startingBalance, dailyTarget, weeks, trades])
+  }, [roadMapStartingBalance, actualStartingBalance, dailyTarget, weeks, trades])
 
   return (
     <div className="min-h-screen bg-[#EDE8DF]">
@@ -205,15 +207,26 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
                 The left side shows the ideal compound path. The right side compares it to the member’s actual logged journal P&amp;L.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 bg-white border border-[#D8D0C4] rounded-2xl p-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-white border border-[#D8D0C4] rounded-2xl p-3">
               <label className="text-[10px] font-black uppercase text-[#0D0D1A]/50">
-                Balance
+                Road Map Start
                 <input
                   type="number"
                   min="0"
                   step="100"
-                  value={startingBalance}
-                  onChange={(e) => setStartingBalance(e.target.value)}
+                  value={roadMapStartingBalance}
+                  onChange={(e) => setRoadMapStartingBalance(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-[#D8D0C4] bg-[#F7F3ED] px-2 py-2 text-sm font-bold text-[#0D0D1A] outline-none focus:ring-2 focus:ring-[#0D0D1A]"
+                />
+              </label>
+              <label className="text-[10px] font-black uppercase text-[#0D0D1A]/50">
+                Actual Start
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={actualStartingBalance}
+                  onChange={(e) => setActualStartingBalance(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-[#D8D0C4] bg-[#F7F3ED] px-2 py-2 text-sm font-bold text-[#0D0D1A] outline-none focus:ring-2 focus:ring-[#0D0D1A]"
                 />
               </label>
@@ -247,7 +260,8 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
             <div className="bg-white rounded-xl border border-[#D8D0C4] p-4">
               <p className="text-[10px] font-black uppercase tracking-wide text-[#0D0D1A]/45">Starting Account</p>
-              <p className="text-lg font-black text-[#0D0D1A] mt-1">{money(data.start)}</p>
+              <p className="text-lg font-black text-[#0D0D1A] mt-1">{money(data.roadStart)}</p>
+              <p className="text-[11px] font-bold text-[#0D0D1A]/45 mt-1">Actual start: {money(data.actualStart)}</p>
             </div>
             <div className="bg-white rounded-xl border border-[#D8D0C4] p-4">
               <p className="text-[10px] font-black uppercase tracking-wide text-[#0D0D1A]/45">Road Map Target</p>
