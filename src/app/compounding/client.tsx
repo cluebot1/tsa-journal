@@ -16,7 +16,6 @@ interface RoadRow {
   week: number
   initialBalance: number
   goal: number
-  totalEarnings: number
   balance: number
 }
 
@@ -25,7 +24,6 @@ interface AccountabilityRow {
   week: number
   initialBalance: number
   dailyPnl: number | null
-  totalEarnings: number | null
   endBalance: number | null
   vsRoadMap: number | null
 }
@@ -100,7 +98,6 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
         week: Math.ceil(day / 5),
         initialBalance,
         goal,
-        totalEarnings: balance - roadStart,
         balance,
       })
       roadBalance = balance
@@ -119,14 +116,12 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
     for (let day = 1; day <= dayCount; day++) {
       const initialBalance = actualBalance
       const dailyPnl = actualPnls[day - 1] ?? null
-      let totalEarnings: number | null = null
       let endBalance: number | null = null
       let vsRoadMap: number | null = null
 
       if (dailyPnl != null) {
         actualBalance += dailyPnl
         endBalance = actualBalance
-        totalEarnings = endBalance - actualStart
         vsRoadMap = endBalance - roadRows[day - 1].balance
       }
 
@@ -135,7 +130,6 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
         week: Math.ceil(day / 5),
         initialBalance,
         dailyPnl,
-        totalEarnings,
         endBalance,
         vsRoadMap,
       })
@@ -162,7 +156,7 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
         m.type === 'profit' ? balance - actualStart >= m.target : balance >= m.target
       )
       const roadIndex = roadRows.findIndex((row) =>
-        m.type === 'profit' ? row.totalEarnings >= m.target : row.balance >= m.target
+        m.type === 'profit' ? row.balance - roadStart >= m.target : row.balance >= m.target
       )
       return {
         ...m,
@@ -336,25 +330,23 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
                 The School of Threaded Arts — TSA Compounding Road Map to {data.weekCount} Weeks of {pct(data.rate * 100)} Gains
               </div>
               <div className="overflow-x-auto max-h-[760px]">
-                <table className="w-full min-w-[540px] text-[10px] md:text-[11px] border-collapse">
+                <table className="w-full min-w-[460px] text-[10px] md:text-[11px] border-collapse">
                   <thead>
                     <tr className="bg-[#F3F3F3] text-[#0D0D1A]">
                       <th className="border border-[#111] py-1 px-2 text-left">DAY</th>
                       <th className="border border-[#111] py-1 px-2 text-right">INITIAL BALANCE</th>
                       <th className="border border-[#111] py-1 px-2 text-right">{pct(data.rate * 100)} GOAL</th>
-                      <th className="border border-[#111] py-1 px-2 text-right">TOTAL EARNINGS</th>
                       <th className="border border-[#111] py-1 px-2 text-right">BALANCE</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.roadRows.map((row, index) => (
                       <Fragment key={`road-group-${row.day}`}>
-                        {index % 5 === 0 && <WeekBreak week={row.week} columns={5} />}
+                        {index % 5 === 0 && <WeekBreak week={row.week} columns={4} />}
                         <tr className="odd:bg-white even:bg-[#FAFAFA]">
                           <td className="border border-[#999] py-1 px-2 font-bold">{row.day}</td>
                           <td className="border border-[#999] py-1 px-2 text-right">{money(row.initialBalance)}</td>
                           <td className="border border-[#999] py-1 px-2 text-right">{money(row.goal)}</td>
-                          <td className="border border-[#999] py-1 px-2 text-right">{money(row.totalEarnings)}</td>
                           <td className="border border-[#999] py-1 px-2 text-right font-bold">{money(row.balance)}</td>
                         </tr>
                       </Fragment>
@@ -369,13 +361,12 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
                 Daily Compounding Accountability Sheet to Monitor Progress
               </div>
               <div className="overflow-x-auto max-h-[760px]">
-                <table className="w-full min-w-[640px] text-[10px] md:text-[11px] border-collapse">
+                <table className="w-full min-w-[560px] text-[10px] md:text-[11px] border-collapse">
                   <thead>
                     <tr className="bg-[#F3F3F3] text-[#0D0D1A]">
                       <th className="border border-[#111] py-1 px-2 text-left">DAY</th>
                       <th className="border border-[#111] py-1 px-2 text-right">INITIAL BALANCE</th>
                       <th className="border border-[#111] py-1 px-2 text-right">DAILY P&amp;L</th>
-                      <th className="border border-[#111] py-1 px-2 text-right">TOTAL EARNINGS</th>
                       <th className="border border-[#111] py-1 px-2 text-right">END BALANCE</th>
                       <th className="border border-[#111] py-1 px-2 text-right">VS MAP</th>
                     </tr>
@@ -383,14 +374,13 @@ export default function CompoundingClient({ userEmail, initialStartingBalance, t
                   <tbody>
                     {data.accountabilityRows.map((row, index) => (
                       <Fragment key={`actual-group-${row.day}`}>
-                        {index % 5 === 0 && <WeekBreak week={row.week} columns={6} />}
+                        {index % 5 === 0 && <WeekBreak week={row.week} columns={5} />}
                         <tr className="odd:bg-white even:bg-[#FAFAFA]">
                           <td className="border border-[#999] py-1 px-2 font-bold">{row.day}</td>
                           <td className="border border-[#999] py-1 px-2 text-right">{money(row.initialBalance)}</td>
                           <td className={`border border-[#999] py-1 px-2 text-right font-bold ${row.dailyPnl == null ? 'text-[#999]' : row.dailyPnl >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                             {row.dailyPnl == null ? '$0.00' : signedMoney(row.dailyPnl)}
                           </td>
-                          <td className="border border-[#999] py-1 px-2 text-right">{row.totalEarnings == null ? '$0.00' : money(row.totalEarnings)}</td>
                           <td className="border border-[#999] py-1 px-2 text-right font-bold">{row.endBalance == null ? money(row.initialBalance) : money(row.endBalance)}</td>
                           <td className={`border border-[#999] py-1 px-2 text-right font-bold ${row.vsRoadMap == null ? 'text-[#999]' : row.vsRoadMap >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                             {row.vsRoadMap == null ? '—' : signedMoney(row.vsRoadMap)}
