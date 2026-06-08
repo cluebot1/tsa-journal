@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 import NavBar from '@/components/NavBar'
 import MobileNav from '@/components/MobileNav'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -177,27 +176,14 @@ export default function TradesPage() {
   const fetchTrades = useCallback(async () => {
     setLoading(true)
     try {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) return
-
-      setUserEmail(user.email)
-
-      const { data, error } = await supabase
-        .from('trades')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false })
-
-      if (error) {
+      const response = await fetch('/api/trades')
+      if (!response.ok) {
         toast.error('Failed to load trades.')
         return
       }
-
-      setTrades(data ?? [])
+      const result = await response.json()
+      setUserEmail(result.userEmail)
+      setTrades(result.trades ?? [])
     } finally {
       setLoading(false)
     }
@@ -261,9 +247,6 @@ export default function TradesPage() {
     if (!csvParsed.length) return
     setCsvImporting(true)
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
       const inserts = csvParsed.map(row => {
         let notesText = row.notes && row.notes.trim() ? row.notes.trim() : null
         if (row.trade_type && row.trade_type.trim()) {
@@ -271,7 +254,6 @@ export default function TradesPage() {
           notesText = notesText ? `${prefix} ${notesText}` : prefix
         }
         return {
-          user_id: user.id,
           date: parseDate(row.date ?? '') ?? new Date().toISOString().split("T")[0],
           ticker: (row.ticker ?? 'UNKNOWN').toUpperCase(),
           direction: row.direction ? mapDirection(row.direction) : null,
@@ -287,26 +269,15 @@ export default function TradesPage() {
           followed_plan: row.followed_plan ? mapFollowedPlan(row.followed_plan) : null,
         }
       })
-      const { data: insertedTrades, error } = await supabase.from('trades').insert(inserts).select('id, ticker, date, notes')
-      if (error) { toast.error('Import failed: ' + error.message); return }
+      const response = await fetch('/api/trades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trades: inserts, createJournalFromNotes: true }),
+      })
+      const result = await response.json()
+      if (!response.ok) { toast.error('Import failed: ' + (result.error || 'Unknown error')); return }
 
-      const journalInserts = (insertedTrades ?? [])
-        .filter(t => t.notes && t.notes.trim())
-        .map(t => ({
-          user_id: user.id,
-          trade_id: t.id,
-          date: t.date,
-          title: `${t.ticker} — ${t.date}`,
-          content: t.notes,
-          mood: null,
-        }))
-
-      let journalCount = 0
-      if (journalInserts.length > 0) {
-        const { error: journalError } = await supabase.from('journal_entries').insert(journalInserts)
-        if (!journalError) journalCount = journalInserts.length
-      }
-
+      const journalCount = result.journalCount ?? 0
       const tradeCount = inserts.length
       toast.success(journalCount > 0
         ? `${tradeCount} trades imported + ${journalCount} journal entries created`
@@ -326,9 +297,12 @@ export default function TradesPage() {
     if (!confirm('Delete this trade? This cannot be undone.')) return
     setDeletingId(id)
     try {
-      const supabase = createClient()
-      const { error } = await supabase.from('trades').delete().eq('id', id)
-      if (error) {
+      const response = await fetch('/api/trades', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [id] }),
+      })
+      if (!response.ok) {
         toast.error('Failed to delete trade.')
       } else {
         toast.success('Trade deleted.')
@@ -383,9 +357,12 @@ export default function TradesPage() {
     if (!confirm(`Delete ${selectedIds.size} trade${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return
     setBulkDeleting(true)
     try {
-      const supabase = createClient()
-      const { error } = await supabase.from('trades').delete().in('id', Array.from(selectedIds))
-      if (error) {
+      const response = await fetch('/api/trades', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      })
+      if (!response.ok) {
         toast.error('Failed to delete trades.')
       } else {
         toast.success(`${selectedIds.size} trade${selectedIds.size > 1 ? 's' : ''} deleted.`)
