@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -19,52 +18,33 @@ export default function SignupPage() {
     setError(null)
     setLoading(true)
 
-    const supabase = createClient()
+    try {
+      const response = await fetch('/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName, email, password }),
+      })
 
-    // Sign up
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-      },
-    })
+      const result = await response.json()
 
-    if (signUpError) {
-      setError(signUpError.message)
+      if (!response.ok) {
+        setError(result.error || 'Signup failed. Please try again.')
+        setLoading(false)
+        return
+      }
+
+      if (result.needsEmailConfirmation) {
+        setSuccess(true)
+        setLoading(false)
+        return
+      }
+
+      router.push('/login?created=1')
+      router.refresh()
+    } catch {
+      setError('Connection issue. Please refresh and try again.')
       setLoading(false)
-      return
     }
-
-    const user = signUpData.user
-    if (!user) {
-      setError('Signup failed. Please try again.')
-      setLoading(false)
-      return
-    }
-
-    // Insert into profiles
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: user.id,
-      email: user.email,
-      full_name: fullName,
-    })
-
-    if (profileError) {
-      setError(profileError.message)
-      setLoading(false)
-      return
-    }
-
-    // Check if email confirmation is needed
-    if (!signUpData.session) {
-      setSuccess(true)
-      setLoading(false)
-      return
-    }
-
-    router.push('/dashboard')
-    router.refresh()
   }
 
   if (success) {
