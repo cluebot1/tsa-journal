@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -20,10 +19,16 @@ export default function DeleteTradeButton({ tradeId }: DeleteTradeButtonProps) {
     setDeleting(true)
 
     try {
-      const supabase = createClient()
-      const { error } = await supabase.from('trades').delete().eq('id', tradeId)
+      const response = await fetch('/api/trades', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [tradeId] }),
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to delete trade.')
+      }
 
       toast.success('Trade deleted.')
       router.push('/trades')

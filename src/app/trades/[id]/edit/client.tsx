@@ -233,31 +233,36 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
     setSubmitting(true)
     try {
       const filteredUrls = screenshotUrls.filter((u) => u.trim() !== '')
-      const { error } = await supabase
-        .from('trades')
-        .update({
-          date,
-          ticker: ticker.toUpperCase(),
-          direction,
-          setup_type: setupType,
-          catalyst: catalyst || null,
-          key_level: keyLevel || null,
-          strat_setup: stratSetup || null,
-          risk_amount: riskAmount ? parseFloat(riskAmount) : null,
-          entry_price: entryPrice ? parseFloat(entryPrice) : null,
-          exit_price: exitPrice ? parseFloat(exitPrice) : null,
-          contracts: contracts ? parseInt(contracts) : null,
-          pnl: pnl ? parseFloat(pnl) : null,
-          notes: notes || null,
-          screenshot_urls: filteredUrls.length > 0 ? filteredUrls : null,
-          emotion: emotion || null,
-          followed_plan: followedPlan || null,
-          what_went_right: whatWentRight || null,
-          what_went_wrong: whatWentWrong || null,
-          lessons: lessons || null,
-        })
-        .eq('id', tradeId)
-      if (error) throw error
+      const response = await fetch('/api/trades', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: tradeId,
+          trade: {
+            date,
+            ticker: ticker.toUpperCase(),
+            direction,
+            setup_type: setupType,
+            catalyst: catalyst || null,
+            key_level: keyLevel || null,
+            strat_setup: stratSetup || null,
+            risk_amount: riskAmount ? parseFloat(riskAmount) : null,
+            entry_price: entryPrice ? parseFloat(entryPrice) : null,
+            exit_price: exitPrice ? parseFloat(exitPrice) : null,
+            contracts: contracts ? parseInt(contracts) : null,
+            pnl: pnl ? parseFloat(pnl) : null,
+            notes: notes || null,
+            screenshot_urls: filteredUrls.length > 0 ? filteredUrls : null,
+            emotion: emotion || null,
+            followed_plan: followedPlan || null,
+            what_went_right: whatWentRight || null,
+            what_went_wrong: whatWentWrong || null,
+            lessons: lessons || null,
+          },
+        }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Failed to update trade.')
       toast.success('Trade updated!')
       router.push(`/trades/${tradeId}`)
     } catch (err: unknown) {

@@ -112,6 +112,39 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, trades: insertedTrades ?? [], journalCount })
 }
 
+export async function PATCH(request: Request) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
+  }
+
+  const { id, trade } = await request.json()
+
+  if (typeof id !== 'string' || !trade) {
+    return NextResponse.json({ error: 'Trade ID and trade data are required.' }, { status: 400 })
+  }
+
+  const cleanedTrade = cleanTrade(trade, user.id)
+  delete cleanedTrade.user_id
+
+  const { error } = await supabase
+    .from('trades')
+    .update(cleanedTrade)
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
+
+  return NextResponse.json({ ok: true })
+}
+
 export async function DELETE(request: Request) {
   const supabase = await createClient()
   const {
